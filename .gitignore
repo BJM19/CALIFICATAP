@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Datos personales de estudiantes y resultados: NO se suben
+salidas/
+escaneos/*
+!escaneos/.gitkeep
+datos/*
+!datos/.gitkeep
+*.zip
+
+# Sesión local del programa
+configuracion/ultima_sesion.json
+configuracion/ultima_lista.csv
+
+# OMRChecker se descarga aparte (ver README)
+externo/OMRChecker/
+
+# Archivos de trabajo
+Claude outputs/
+Thumbs.db
+desktop.ini
+.DS_Store

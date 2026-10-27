@@ -1,0 +1,18 @@
+# CalificaTAP — dependencias (instalar UNA vez, con internet):
+#   pip install -r requirements.txt
+# Después todo funciona sin conexión.
+
+# Módulo 1 — Generador
+reportlab>=4.0        # dibuja el PDF
+opencv-python>=4.8    # imagen del marcador y verificación
+numpy>=1.25
+pillow>=10.0          # imágenes en la interfaz (vista previa)
+pymupdf>=1.23         # convierte PDF → imagen (verificación). OMRChecker también lo usa
+
+# Módulo 2 — Lector (OMRChecker se descarga aparte en externo/OMRChecker
+# y sus dependencias se instalan con externo/OMRChecker/requirements.txt)
+
+# Módulo 3 — Reportes
+pandas>=2.0
+openpyxl>=3.1         # para que pandas escriba archivos .xlsx
+matplotlib>=3.7       # gráficos de la pestaña Resultados

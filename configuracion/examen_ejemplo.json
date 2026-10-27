@@ -1,0 +1,25 @@
+{
+  "colegio": {
+    "nombre": "Institución Educativa IESTAP",
+    "municipio": "Puerto López, Meta",
+    "logo": null
+  },
+  "examen": {
+    "nombre": "Simulacro Saber 11 - Tercer periodo",
+    "grado": "11",
+    "fecha": "2026-10-20"
+  },
+  "documento": {
+    "digitos": 10
+  },
+  "opciones": {
+    "numeracion": "continua"
+  },
+  "materias": [
+    { "codigo": "MAT", "nombre": "Matemáticas",           "preguntas": 25, "opciones": 4 },
+    { "codigo": "LEC", "nombre": "Lectura Crítica",       "preguntas": 25, "opciones": 4 },
+    { "codigo": "CIE", "nombre": "Ciencias Naturales",    "preguntas": 20, "opciones": 4 },
+    { "codigo": "SOC", "nombre": "Sociales y Ciudadanas", "preguntas": 20, "opciones": 4 },
+    { "codigo": "ING", "nombre": "Inglés",                "preguntas": 15, "opciones": 3 }
+  ]
+}
