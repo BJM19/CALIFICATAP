@@ -23,7 +23,6 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("--estudiantes", type=int, default=24)
-    parser.add_argument("--fotos", type=int, default=3, help="cuántas hojas van como foto")
     parser.add_argument("--semilla", type=int, default=11)
     parser.add_argument("--sin-nombre", action="store_true",
                         help="hojas en blanco (sin nombre ni documento impresos)")
@@ -35,7 +34,7 @@ def main() -> int:
         return 1
     examen = examenes[0]
     destino, _, _ = crear_curso_de_practica(examen, RAIZ / "escaneos" / f"practica_{examen.carpeta.name}",
-                                      args.estudiantes, args.fotos, not args.sin_nombre, args.semilla)
+                                      args.estudiantes, not args.sin_nombre, args.semilla)
     print(f"✔ Curso de práctica creado en: {destino}")
     return 0
 

@@ -9,7 +9,7 @@ generar.py — Une todas las piezas del Módulo 1.
         ▼
     Maqueta  (única fuente de verdad)
         ├── dibujante_pdf.dibujar_pdf()            → hoja_respuestas.pdf
-        └── plantilla_omr.guardar_archivos_omr()   → template.json, template_fotos.json,
+        └── plantilla_omr.guardar_archivos_omr()   → template.json (+ una por hoja),
                                                      config.json, omr_marker.jpg
         │
         └── verificar.verificar()                  → verificacion.png

@@ -14,12 +14,12 @@ pensado para funcionar **sin internet** en la escuela rural.
 
 </div>
 
-CalificaTAP crea hojas de respuestas a la medida de cada examen, las **lee** desde un PDF del
-escáner o desde fotos de celular, y entrega las **notas**, los resultados por estudiante,
+CalificaTAP crea hojas de respuestas a la medida de cada examen, las **lee** desde el PDF del
+escáner, y entrega las **notas**, los resultados por estudiante,
 materia y pregunta, boletines individuales y un archivo de Excel.
 
-Nació en la Media Técnica en Desarrollo de Software de la **IESTAP** (Institución Educativa
-Santa Teresa de Pachaquiaro, Puerto López, Meta, Colombia) para resolver una necesidad real del
+Lo creó un docente de la **IESTAP** (Institución Educativa Santa Teresa de Pachaquiaro,
+Puerto López, Meta, Colombia) para resolver una necesidad real del
 colegio: calificar simulacros tipo Saber 11 sin pasar horas revisando hojas a mano.
 
 <p align="center">
@@ -48,7 +48,7 @@ colegio: calificar simulacros tipo Saber 11 sin pasar horas revisando hojas a ma
 | Módulo | Qué hace |
 |---|---|
 | **1 · Crear hoja** | Diseña la hoja: colegio, logo, materias, número de preguntas y opciones (A–D, A–E…). Vista previa en vivo. Genera el PDF para imprimir y la plantilla de lectura, **siempre sincronizados**. |
-| **2 · Leer hojas** | Lee PDFs del escáner y fotos de celular (con [OMRChecker](https://github.com/Udayraj123/OMRChecker)). Muestra lo que detectó en cada hoja y permite corregir a mano. |
+| **2 · Leer hojas** | Lee los PDF del escáner (con [OMRChecker](https://github.com/Udayraj123/OMRChecker)). Muestra lo que detectó en cada hoja y permite corregir a mano. |
 | **3 · Resultados** | Clave de respuestas, notas en la escala que se elija (por defecto 1,0–5,0), tablero con gráficos, análisis por pregunta, alertas, Excel y boletines en PDF. |
 | **4 · Seguimiento** | Compara varios exámenes (por ejemplo, los simulacros del año) para ver si el curso y cada estudiante mejoran. |
 
@@ -106,9 +106,10 @@ Se hace **una sola vez, con internet**. Después el programa funciona sin conexi
    «Plantilla Saber 11») y pulse **Generar hoja de respuestas**.
    Imprima en **«Tamaño real» / 100 %**, nunca «Ajustar a la página».
 2. **Día del examen:** lápiz No. 2 o lapicero negro, rellenando completamente un solo círculo.
-3. **Leer hojas:** escanee todas las hojas en un solo PDF (200–300 ppp) o tome fotos desde arriba,
-   agréguelas y pulse **Leer hojas**. Verde = bien, amarillo = revisar, rojo = no se leyó.
-   Doble clic sobre una hoja para corregirla.
+3. **Leer hojas:** escanee todas las hojas en un solo PDF (blanco y negro o grises,
+   200–300 ppp), agréguelo y pulse **Leer hojas**. Verde = bien, amarillo = revisar, rojo = no se leyó.
+   Debajo de la lista, el recuadro de observaciones dice qué preguntas tienen doble marca o
+   quedaron en blanco. Doble clic sobre una hoja para corregirla.
 4. **Resultados:** escriba la clave (una línea por materia) o tómela de una hoja leída, importe
    la lista del curso y revise notas, gráficos y alertas. Exporte a Excel o genere los boletines.
 
@@ -156,8 +157,9 @@ no coinciden al milímetro, las respuestas se leen mal. CalificaTAP lo resuelve 
 
 ### Lectura
 
-- Dos plantillas por hoja: una para **escáner** (`CropOnMarkers`) y otra para **fotos**
-  (`CropPage` + `CropOnMarkers`, recorta la hoja del fondo primero).
+- **Solo PDF del escáner.** Cada página se convierte en imagen (200 ppp) y OMRChecker la endereza
+  con las 4 marcas (`CropOnMarkers`). Hubo una versión que también leía fotos de celular, pero
+  en las pruebas con hojas reales los PDF se leyeron perfecto y las fotos no, así que se retiró.
 - OMRChecker se ejecuta como proceso aparte; la interfaz muestra el avance sin congelarse.
 - En exámenes de varias hojas hay una primera pasada que solo lee el código del examen, el número
   de hoja y el documento; luego cada imagen se lee con la plantilla de su hoja.
@@ -183,7 +185,7 @@ CalificaTAP/
 ├── requirements.txt
 ├── configuracion/               ← JSON de cada examen (examen_ejemplo.json)
 ├── datos/                       ← listas y claves locales (no se suben a GitHub)
-├── escaneos/                    ← PDFs y fotos de las hojas (no se suben a GitHub)
+├── escaneos/                    ← PDF escaneados de las hojas (no se suben a GitHub)
 ├── salidas/                     ← lo que genera el programa, una carpeta por examen (no se sube)
 ├── externo/OMRChecker/          ← motor de lectura (se descarga aparte)
 ├── calificatap/
@@ -199,7 +201,7 @@ CalificaTAP/
 │   │   ├── verificar.py         ←   comprueba que PDF y plantilla coinciden
 │   │   └── generar.py           ←   une todo; código del examen; hojas con nombre
 │   ├── lector/                  ← Módulo 2
-│   │   ├── omr.py               ←   PDF/fotos → OMRChecker
+│   │   ├── omr.py               ←   PDF del escáner → OMRChecker
 │   │   ├── hojas.py             ←   lo leído de cada hoja (lecturas/respuestas.csv)
 │   │   └── practica.py          ←   inventa un curso para practicar sin imprimir
 │   ├── reportes/                ← Módulo 3
@@ -231,8 +233,8 @@ CalificaTAP/
 python pruebas/prueba_omrchecker.py
 ```
 
-Rellena al azar una hoja generada (con formas y documento), simula un **escaneo** y una **foto
-torcida**, ejecuta OMRChecker y compara lo leído con lo marcado. Debe terminar con
+Rellena al azar una hoja generada (con formas y documento), simula un **escaneo** derecho y otro
+**torcido** (girado 1–2° y con ruido), ejecuta OMRChecker y compara lo leído con lo marcado. Debe terminar con
 `✔ OMRChecker leyó exactamente lo que se marcó`.
 
 Para practicar con la interfaz sin imprimir: pestaña **Leer hojas → 🧪 Hojas de práctica**,
@@ -241,10 +243,10 @@ o `python pruebas/crear_hojas_de_prueba.py`.
 ## Hoja de ruta
 
 - [x] Generador de hojas con vista previa y verificación automática
-- [x] Lector de escaneos y fotos con corrección manual
+- [x] Lector de PDF escaneados con corrección manual
+- [x] Prueba con hojas impresas: PDF ✔ · fotos de celular ✘ (retiradas)
 - [x] Resultados, Excel, seguimiento, boletines
 - [x] Hojas con nombre, formas, código del examen, varias hojas
-- [ ] Prueba de campo con hojas impresas y calibración de la sensibilidad de lectura
 - [ ] Instalador `.exe` (sin necesidad de instalar Python)
 - [ ] Barajar opciones / generar cuadernillos por forma
 - [ ] Pruebas unitarias con pytest
@@ -258,8 +260,7 @@ Para pasar un examen a otro computador use **Compartir examen → Exportar**.
 ## Créditos y licencia
 
 Desarrollado por **Brayan Jiménez Moya**, docente de Tecnología de la
-**Institución Educativa Santa Teresa de Pachaquiaro (IESTAP)**, Puerto López, Meta, Colombia,
-como proyecto de la Media Técnica en Desarrollo de Software.
+**Institución Educativa Santa Teresa de Pachaquiaro (IESTAP)**, Puerto López, Meta, Colombia.
 
 La lectura de burbujas usa [OMRChecker](https://github.com/Udayraj123/OMRChecker)
 de Udayraj Deshmukh y colaboradores (licencia MIT), que se descarga aparte.

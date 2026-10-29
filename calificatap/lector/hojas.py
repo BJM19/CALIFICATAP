@@ -27,7 +27,7 @@ def normalizar_documento(texto: str) -> str:
 @dataclass
 class HojaLeida:
     archivo: str                     # nombre de la imagen procesada (único)
-    origen: str                      # archivo que subió el docente (PDF o foto)
+    origen: str                      # PDF que subió el docente (y página)
     documento: str = ""
     respuestas: dict[str, str] = field(default_factory=dict)   # {"MAT_01": "B", ...}
     imagen: str = ""                 # ruta de la imagen con las marcas detectadas

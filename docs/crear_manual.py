@@ -111,18 +111,18 @@ h += [Spacer(1, 2.5 * cm), p("CalificaTAP", TITULO),
       p("Manual para docentes", SUB), Spacer(1, 1.2 * cm),
       captura("00_hoja_con_nombre.png", 9),
       Spacer(1, 0.8 * cm),
-      p("Media Técnica en Desarrollo de Software · IESTAP · Puerto López, Meta", PIE),
+      p("Brayan Jiménez Moya · IESTAP · Puerto López, Meta", PIE),
       PageBreak()]
 
 # --- 1. Qué es ---
 h += [p("1. ¿Qué hace CalificaTAP?", H1),
       p("CalificaTAP crea hojas de respuestas para sus exámenes, las <b>lee</b> a partir de un "
-        "escaneo o de fotos, y le entrega las <b>notas</b>, los resultados por materia y por "
+        "escaneo en PDF, y le entrega las <b>notas</b>, los resultados por materia y por "
         "pregunta, y un archivo de Excel. Funciona <b>sin internet</b>."),
       tabla([["Pestaña", "Para qué sirve"],
              ["1. Crear hoja", "Diseñar la hoja (materias, preguntas, opciones) e imprimirla, "
                                "en blanco o con el nombre de cada estudiante."],
-             ["2. Leer hojas", "Cargar el PDF del escáner o las fotos. El programa lee cada hoja "
+             ["2. Leer hojas", "Cargar el PDF del escáner. El programa lee cada hoja "
                                "y le muestra lo que detectó."],
              ["3. Resultados", "Escribir la clave y ver notas, gráficos y alertas. Exportar a Excel."],
              ["4. Seguimiento", "Comparar varios exámenes para ver si el curso mejora."]],
@@ -200,33 +200,41 @@ h += [p("3. El día del examen", H1),
              "círculo por pregunta. Una X o un chulo no se lee bien.",
              "Si se equivocan, que borren muy bien. Sin corrector.",
              "Que no doblen la hoja ni escriban sobre las marcas negras de las esquinas."]),
-      p("3.1 Escanear o fotografiar", H2),
-      tabla([["", "Escáner (recomendado)", "Foto de celular"],
-             ["Cómo", "Todas las hojas en un solo PDF. Blanco y negro o escala de grises, "
-                      "200 a 300 ppp.",
-              "Desde arriba, con la hoja completa, plana y bien iluminada. Que se vean las "
-              "cuatro marcas negras."],
-             ["Orden", "Da igual: el programa identifica a cada estudiante por su documento.",
-              "Da igual."]], [2.5, 7, 7]),
+      p("3.1 Escanear", H2),
+      tabla([["", "Cómo escanear"],
+             ["Formato", "Todas las hojas en un solo PDF (o en varios). Blanco y negro o escala "
+                         "de grises, 200 a 300 ppp."],
+             ["Hojas", "Derechas y sin dobleces, con las cuatro marcas negras de las esquinas "
+                       "completas."],
+             ["Orden", "Da igual: el programa identifica a cada estudiante por su documento."]],
+            [2.5, 14]),
+      recuadro("CalificaTAP lee <b>solo PDF del escáner</b>. En las pruebas con hojas reales, las "
+               "fotos de celular no se leyeron bien. Si no "
+               "hay escáner en el colegio, la fotocopiadora suele tener la opción «Escanear a PDF» "
+               "o «Escanear a USB».", AMARILLO),
       Spacer(1, 0.6 * cm),
 
       p("4. Leer las hojas", H1),
       lista(["En la pestaña <b>«2. Leer hojas»</b> elija el examen arriba.",
-             "Pulse <b>«Agregar PDF o fotos»</b> (o «Agregar carpeta») y elija los archivos. Puede "
-             "mezclar PDF y fotos.",
+             "Pulse <b>«Agregar PDF»</b> (o «Agregar carpeta») y elija el PDF del escáner. Puede "
+             "agregar varios.",
              "Pulse <b>«Leer hojas»</b> y espere: la barra muestra el avance (unos segundos por hoja).",
              "Haga clic en una hoja de la lista para ver, a la derecha, lo que detectó el programa. "
-             "Con la rueda del ratón se acerca."], numerada=True),
-      captura("03_leer.png", pie="Pestaña «Leer hojas»: lista de hojas leídas e imagen con las "
+             "Con la rueda del ratón se acerca.",
+             "Debajo de la lista, el recuadro de <b>observaciones</b> explica todo lo que encontró "
+             "en esa hoja, con los números de las preguntas: cuáles tienen doble marca, cuáles "
+             "quedaron sin responder, si el documento está incompleto o no está en la lista."],
+            numerada=True),
+      captura("03_leer.png", pie="Pestaña «Leer hojas»: hojas leídas, observaciones de la hoja elegida e imagen con las "
                                  "marcas detectadas."),
       p("4.1 ¿Qué significan los colores?", H2),
       tabla([["Estado", "Qué hacer"],
              ["Lista", "Nada: se leyó bien."],
              ["Revisar (amarillo)", "Algo merece una mirada: doble marca, documento incompleto, "
                                     "no marcó la forma. Haga doble clic para revisarla."],
-             ["No se leyó (rojo)", "No se encontraron las 4 marcas (foto cortada, torcida u oscura), "
-                                   "o es una hoja de OTRO examen. Tome la foto de nuevo, léala en "
-                                   "el examen correcto o corríjala a mano."]],
+             ["No se leyó (rojo)", "No se encontraron las 4 marcas (hoja muy torcida o con una "
+                                   "esquina cortada), o es una hoja de OTRO examen. Escanéela de "
+                                   "nuevo, léala en el examen correcto o corríjala a mano."]],
             [4, 12.5], {2: AMARILLO, 3: ROJO_CLARO}),
       p("4.2 Corregir una hoja a mano", H2),
       p("Doble clic sobre la hoja: a la izquierda verá la imagen y a la derecha el documento, la "
@@ -235,7 +243,7 @@ h += [p("3. El día del examen", H1),
       captura("04_corregir.png", 15, "Ventana de corrección."),
       p("4.3 Otros botones", H2),
       lista(["<b>Eliminar:</b> quita las hojas seleccionadas (con Ctrl o Shift se eligen varias).",
-             "<b>Borrar todas:</b> empieza de cero en ese examen. Los PDF y fotos originales no se borran.",
+             "<b>Borrar todas:</b> empieza de cero en ese examen. Los PDF originales no se borran.",
              "Si vuelve a leer la hoja de un estudiante, la nueva <b>reemplaza</b> a la anterior: "
              "no se duplica.",
              "<b>Hojas de práctica:</b> crea hojas llenadas al azar para probar el programa sin imprimir. "
@@ -319,8 +327,11 @@ h += [p("7. Compartir un examen con otro computador", H1),
 h += [p("8. Problemas frecuentes", H1),
       tabla([["Problema", "Solución"],
              ["Una hoja sale «No se leyó».",
-              "Revise que se vean las 4 marcas negras completas. En fotos: desde arriba, sin sombras "
-              "fuertes y con la hoja plana. Si no se puede repetir, corríjala a mano con doble clic."],
+              "Revise que se vean las 4 marcas negras completas y que la hoja haya entrado derecha "
+              "al escáner. Escanéela de nuevo o corríjala a mano con doble clic."],
+             ["¿Puedo usar fotos del celular?",
+              "No. En las pruebas reales no se leyeron bien. Use el escáner o la fotocopiadora "
+              "(«Escanear a PDF»)."],
              ["«Es una hoja de otro examen».",
               "Esa hoja se imprimió para otro examen (o con un diseño anterior). Léala en el examen "
               "que le corresponde."],
@@ -347,8 +358,8 @@ h += [p("8. Problemas frecuentes", H1),
         "de resultados. Para hacer una copia de seguridad, copie la carpeta «salidas» o use "
         "«Compartir examen → Exportar»."),
       Spacer(1, 1 * cm),
-      p("CalificaTAP es un proyecto de los estudiantes de la Media Técnica en Desarrollo de "
-        "Software de la IESTAP. Funciona con OMRChecker (software libre).", PIE)]
+      p("CalificaTAP fue desarrollado por Brayan Jiménez Moya, docente de Tecnología de la "
+        "IESTAP. Funciona con OMRChecker (software libre).", PIE)]
 
 
 def main() -> None:

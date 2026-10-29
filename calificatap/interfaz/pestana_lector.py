@@ -3,12 +3,12 @@ pestana_lector.py — Pantalla "Leer hojas" (Módulo 2).
 
     ┌────────────────────────────────────┬──────────────────────────┐
     │ Examen: [Simulacro Saber 11 ▼]     │                          │
-    │ 1. Agregue las hojas  [PDF/fotos]  │     IMAGEN DE LA HOJA    │
+    │ 1. Agregue las hojas  [PDF]        │     IMAGEN DE LA HOJA    │
     │ [ LEER HOJAS ]  ████████░░ 18/24   │   con las marcas que     │
     │ 2. Hojas leídas                    │   detectó el programa    │
     │  ✔ 1149573077  Ana Rojas           │                          │
     │  ⚠ 10705839    revisar: documento  │                          │
-    │  ✘ foto_03.jpg no se pudo leer     │                          │
+    │  ✘ curso.pdf (pág. 7) no se leyó   │                          │
     │ [Corregir…] [Eliminar]             │                          │
     └────────────────────────────────────┴──────────────────────────┘
 
@@ -35,6 +35,9 @@ from . import estilos
 from .utilidades import MarcoDesplazable, SelectorExamen, VisorImagen
 
 ICONOS = {LISTA: "✔ Lista", REVISAR: "⚠ Revisar", ERROR: "✘ No se leyó"}
+AMARILLO_CLARO = "#FFF4D6"
+# Color de fondo del recuadro de observaciones, según el estado de la hoja
+FONDO_ESTADO = {LISTA: estilos.VERDE_CLARO, REVISAR: AMARILLO_CLARO, ERROR: estilos.ROJO_CLARO}
 
 
 class PestanaLector(ttk.Frame):
@@ -71,7 +74,7 @@ class PestanaLector(ttk.Frame):
         marco.pack(fill="x")
         barra = ttk.Frame(marco, style="Panel.TFrame")
         barra.pack(fill="x")
-        ttk.Button(barra, text="📄 Agregar PDF o fotos…",
+        ttk.Button(barra, text="📄 Agregar PDF…",
                    command=self.agregar_archivos).pack(side="left")
         ttk.Button(barra, text="📁 Agregar carpeta…",
                    command=self.agregar_carpeta).pack(side="left", padx=6)
@@ -86,8 +89,8 @@ class PestanaLector(ttk.Frame):
                                            highlightbackground=estilos.BORDE)
         self.lista_pendientes.pack(fill="x", pady=(6, 2))
         ttk.Label(marco, style="Ayuda.TLabel", wraplength=500, justify="left",
-                  text="Puede mezclar PDF del escáner (con muchas hojas) y fotos tomadas con "
-                       "el celular. Para fotos: hoja completa, plana y con buena luz.").pack(anchor="w")
+                  text="Escanee todas las hojas en un PDF (blanco y negro o grises, 200–300 ppp). "
+                       "Puede agregar varios PDF a la vez.").pack(anchor="w")
 
         # --- Botón leer + barra de avance ---
         fila = ttk.Frame(izquierda)
@@ -124,22 +127,44 @@ class PestanaLector(ttk.Frame):
         combo.pack(side="left", padx=6)
         combo.bind("<<ComboboxSelected>>", lambda e: self._llenar_tabla())
 
+        # --- Recuadro de observaciones (debajo de la tabla) ---
+        # La columna "Observaciones" de la tabla es corta; aquí se ve completo
+        # lo que encontró el programa en la hoja elegida, con los números de
+        # las preguntas.
+        self.panel_obs = tk.Frame(marco, bg=estilos.FONDO, highlightthickness=1,
+                                  highlightbackground=estilos.BORDE, padx=10, pady=6)
+        self.panel_obs.pack(side="bottom", fill="x", pady=(6, 0))
+        self.lbl_obs_titulo = tk.Label(self.panel_obs, bg=estilos.FONDO, fg=estilos.TEXTO,
+                                       anchor="w", justify="left",
+                                       font=(estilos.FAMILIA, 10, "bold"))
+        self.lbl_obs_titulo.pack(fill="x")
+        self.lbl_obs = tk.Label(self.panel_obs, bg=estilos.FONDO, fg=estilos.TEXTO,
+                                anchor="w", justify="left", font=(estilos.FAMILIA, 10))
+        self.lbl_obs.pack(fill="x")
+        # El texto se acomoda al ancho del recuadro (salta de línea solo)
+        self.panel_obs.bind("<Configure>", lambda e: self.lbl_obs.configure(
+            wraplength=max(200, e.width - 24)))
+        self._mostrar_observaciones(None)
+
         columnas = ("estado", "documento", "hoja", "forma", "nombre", "origen", "observaciones")
         self.tabla = ttk.Treeview(marco, columns=columnas, show="headings", height=8,
                                   selectmode="extended")
-        for col, titulo, ancho in [("estado", "Estado", 95), ("documento", "Documento", 95),
-                                   ("hoja", "Hoja", 45), ("forma", "Forma", 50),
-                                   ("nombre", "Estudiante", 160), ("origen", "Archivo", 175),
-                                   ("observaciones", "Observaciones", 150)]:
+        # Solo "Observaciones" se estira cuando la ventana es más ancha
+        for col, titulo, ancho, estira in [
+                ("estado", "Estado", 95, False), ("documento", "Documento", 95, False),
+                ("hoja", "Hoja", 45, False), ("forma", "Forma", 50, False),
+                ("nombre", "Estudiante", 170, False), ("origen", "Archivo", 140, False),
+                ("observaciones", "Observaciones", 240, True)]:
             self.tabla.heading(col, text=titulo)
-            self.tabla.column(col, width=ancho, minwidth=60)
-        self.tabla.tag_configure(REVISAR, background="#FFF4D6")
+            self.tabla.column(col, width=ancho, minwidth=45, stretch=estira)
+        self.tabla.tag_configure(REVISAR, background=AMARILLO_CLARO)
         self.tabla.tag_configure(ERROR, background=estilos.ROJO_CLARO)
         barra_tabla = ttk.Scrollbar(marco, orient="vertical", command=self.tabla.yview)
         self.tabla.configure(yscrollcommand=barra_tabla.set)
         self.tabla.pack(side="left", fill="both", expand=True)
         barra_tabla.pack(side="left", fill="y")
         self.tabla.bind("<<TreeviewSelect>>", lambda e: self._mostrar_seleccionada())
+        self.tabla.bind("<Configure>", lambda e: self._ajustar_observaciones())
         self.tabla.bind("<Double-Button-1>", lambda e: self.corregir())
 
         # --- Visor ---
@@ -157,6 +182,14 @@ class PestanaLector(ttk.Frame):
         self.selector.actualizar()
         self.cargar_examen()
 
+    def _ajustar_observaciones(self) -> None:
+        """La columna "Observaciones" ocupa todo el ancho que sobra en la tabla."""
+        visibles = self.tabla.cget("displaycolumns")
+        if visibles in ("#all", ("#all",)):
+            visibles = self.tabla.cget("columns")
+        otras = sum(self.tabla.column(c, "width") for c in visibles if c != "observaciones")
+        self.tabla.column("observaciones", width=max(200, self.tabla.winfo_width() - otras - 4))
+
     def cargar_examen(self) -> None:
         examen = self.selector.examen
         self.hojas = cargar_hojas(examen) if examen else []
@@ -167,6 +200,7 @@ class PestanaLector(ttk.Frame):
         if examen and examen.numero_hojas > 1:
             columnas.insert(2, "hoja")     # solo si el examen tiene varias hojas
         self.tabla.configure(displaycolumns=columnas)
+        self._ajustar_observaciones()
         if examen:
             lista = cargar_estudiantes(examen)
             self.nombres = dict(zip(lista["documento"], lista["nombre"]))
@@ -189,8 +223,8 @@ class PestanaLector(ttk.Frame):
     def agregar_archivos(self) -> None:
         tipos = " ".join(f"*{e}" for e in sorted(EXTENSIONES_ADMITIDAS))
         self._agregar(filedialog.askopenfilenames(
-            parent=self, title="Elegir hojas escaneadas o fotos",
-            filetypes=[("PDF e imágenes", tipos), ("Todos los archivos", "*.*")]))
+            parent=self, title="Elegir los PDF del escáner",
+            filetypes=[("PDF del escáner", tipos)]))
 
     def agregar_carpeta(self) -> None:
         carpeta = filedialog.askdirectory(parent=self, title="Elegir carpeta con las hojas")
@@ -209,8 +243,8 @@ class PestanaLector(ttk.Frame):
                    else "24 estudiantes inventados")
         if not messagebox.askyesno(
                 "Hojas de práctica",
-                f"Se crearán hojas llenadas al azar para {quienes} (la mayoría «escaneadas» "
-                "y 3 como «fotos de celular»), para practicar sin imprimir.\n\n¿Crearlas?",
+                f"Se creará un PDF «escaneado» con hojas llenadas al azar para {quienes}, "
+                "para practicar sin imprimir.\n\n¿Crearlas?",
                 parent=self):
             return
         from ..lector.practica import crear_curso_de_practica
@@ -226,7 +260,7 @@ class PestanaLector(ttk.Frame):
                 lista_fija=lista_fija)
         finally:
             self.winfo_toplevel().configure(cursor="")
-        self._agregar([destino / "curso_escaneado.pdf"] + sorted(destino.glob("foto_*.jpg")))
+        self._agregar([destino / "curso_escaneado.pdf"])
         if messagebox.askyesno(
                 "Hojas de práctica listas",
                 "Ya quedaron en la lista de «Agregue las hojas». Pulse «Leer hojas».\n\n"
@@ -261,7 +295,7 @@ class PestanaLector(ttk.Frame):
             return
         if not self.pendientes:
             messagebox.showinfo("Faltan las hojas",
-                                "Agregue los PDF o las fotos con «Agregar PDF o fotos…».",
+                                "Agregue los PDF del escáner con «Agregar PDF…».",
                                 parent=self)
             return
         self._leyendo = True
@@ -333,8 +367,9 @@ class PestanaLector(ttk.Frame):
             texto += f"\n\n⚠ {len(revisar)} hoja(s) tienen algo para revisar (en amarillo)."
         if malas:
             texto += (f"\n\n✘ {len(malas)} hoja(s) no se pudieron leer (en rojo). "
-                      "Suele pasar si la foto está cortada, torcida o con poca luz: "
-                      "tómela de nuevo, o corríjala a mano con doble clic.")
+                      "Suele pasar si la hoja entró muy torcida al escáner o se le cortó "
+                      "una marca negra de las esquinas: escanéela de nuevo, o corríjala a "
+                      "mano con doble clic.")
         self._mostrar_avance(1, 1, "Lectura terminada")
         messagebox.showinfo("Lectura terminada", texto, parent=self)
 
@@ -343,6 +378,7 @@ class PestanaLector(ttk.Frame):
     # ======================================================================
     def _llenar_tabla(self) -> None:
         self.tabla.delete(*self.tabla.get_children())
+        self._mostrar_observaciones(None)
         filtro = self.var_filtro.get()
         for i, h in enumerate(self.hojas):
             if filtro == "Solo para revisar" and h.estado == LISTA:
@@ -372,10 +408,88 @@ class PestanaLector(ttk.Frame):
 
     def _mostrar_seleccionada(self) -> None:
         h = self._hoja_seleccionada()
+        n = len(self.tabla.selection())
+        self._mostrar_observaciones(h, n)
         if h:
             self.visor.mostrar(self.selector.examen.carpeta / h.imagen)
             self.lbl_visor.configure(text=f"{h.origen}  ·  rueda: acercar · arrastrar: mover · "
                                           "doble clic: ajustar")
+
+    # ======================================================================
+    # Observaciones completas de la hoja elegida
+    # ======================================================================
+    def _detalle_observaciones(self, h) -> list[str]:
+        """Lo que encontró el programa en la hoja, en frases completas."""
+        examen = self.selector.examen
+        if h.estado == ERROR:
+            motivo = h.motivo or "No se encontraron las 4 marcas negras de las esquinas"
+            if "otro examen" in motivo:
+                consejo = ("Sepárela y léala en el examen que le corresponde "
+                           "(elíjalo arriba en «Examen»).")
+            else:
+                consejo = ("Escanéela de nuevo (derecha y con las 4 esquinas completas) o "
+                           "corríjala a mano con doble clic.")
+            return [motivo.rstrip(".") + ".", consejo]
+        # Número de cada pregunta tal como aparece impreso en la hoja
+        numeros = examen.numeros_impresos() if examen else {}
+        continua = (examen.datos.get("opciones", {}).get("numeracion", "continua")
+                    == "continua") if examen else True
+
+        def numero(etiqueta: str) -> str:
+            if etiqueta not in numeros:
+                return etiqueta
+            if continua:
+                return str(numeros[etiqueta])
+            return f"{etiqueta.split('_')[0]} {numeros[etiqueta]}"   # ej. "MAT 3"
+
+        def lista_de(etiquetas: list[str], maximo: int = 20) -> str:
+            texto = ", ".join(numero(e) for e in etiquetas[:maximo])
+            return texto + (f" y {len(etiquetas) - maximo} más" if len(etiquetas) > maximo else "")
+
+        lineas = []
+        if h.letras_forma and h.forma not in h.letras_forma:
+            lineas.append("No marcó la forma." if not h.forma
+                          else f"La forma tiene doble marca ({h.forma}).")
+        documento = normalizar_documento(h.documento)
+        if len(documento) < 5:
+            lineas.append(f"Documento incompleto: se leyó «{h.documento or 'nada'}». "
+                          "Corríjalo con doble clic.")
+        elif self.nombres and documento not in self.nombres:
+            lineas.append(f"El documento {h.documento} no está en la lista del curso.")
+        dobles = h.doble_marca()
+        if dobles:
+            lineas.append(f"Doble marca en {len(dobles)} pregunta(s): {lista_de(dobles)}. "
+                          "Si el estudiante borró mal, corríjalas con doble clic; si de verdad "
+                          "marcó dos opciones, déjelas vacías.")
+        blancas = h.sin_responder()
+        total = len(h._propias())
+        if blancas:
+            aviso = " (más de la mitad)" if len(blancas) > total * 0.5 else ""
+            lineas.append(f"Sin responder: {len(blancas)} de {total}{aviso}: {lista_de(blancas)}.")
+        if h.corregida:
+            lineas.append("Esta hoja ya se corrigió a mano.")
+        return lineas
+
+    def _mostrar_observaciones(self, h, seleccionadas: int = 1) -> None:
+        """Llena el recuadro de abajo con las observaciones de la hoja elegida."""
+        if h is None or seleccionadas > 1:
+            fondo = estilos.FONDO
+            titulo = (f"{seleccionadas} hojas seleccionadas" if seleccionadas > 1
+                      else "Observaciones")
+            texto = ("Elija una sola hoja para ver sus observaciones." if seleccionadas > 1
+                     else "Haga clic en una hoja para ver aquí todo lo que encontró el programa.")
+        else:
+            fondo = FONDO_ESTADO[h.estado]
+            nombre = self.nombres.get(normalizar_documento(h.documento), "")
+            quien = " · ".join(x for x in (h.documento, nombre) if x) or h.origen
+            titulo = f"{ICONOS[h.estado]}  —  {quien}"
+            lineas = self._detalle_observaciones(h)
+            texto = ("\n".join(f"•  {linea}" for linea in lineas) if lineas
+                     else "Sin observaciones: la hoja se leyó bien.")
+        for w in (self.panel_obs, self.lbl_obs_titulo, self.lbl_obs):
+            w.configure(bg=fondo)
+        self.lbl_obs_titulo.configure(text=titulo)
+        self.lbl_obs.configure(text=texto)
 
     def eliminar(self) -> None:
         """Quita las hojas seleccionadas (se pueden elegir varias con Ctrl o Shift)."""
@@ -394,7 +508,7 @@ class PestanaLector(ttk.Frame):
         if messagebox.askyesno(
                 "Borrar todas las hojas leídas",
                 f"Se quitarán las {len(self.hojas)} hojas leídas de este examen "
-                "(los PDF y fotos originales NO se borran; se pueden volver a leer).\n\n"
+                "(los PDF originales NO se borran; se pueden volver a leer).\n\n"
                 "¿Continuar?", parent=self):
             self._quitar(list(self.hojas))
 

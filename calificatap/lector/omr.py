@@ -2,12 +2,13 @@
 omr.py — Lee las hojas diligenciadas usando OMRChecker.
 
 Pasos:
-    1. Preparar las imágenes: cada página de un PDF se convierte en una imagen;
-       las fotos se copian tal cual.
-    2. Primera pasada con template.json (pensado para ESCÁNER).
-    3. Las hojas que fallen se intentan otra vez con template_fotos.json
-       (que primero recorta la hoja del fondo: pensado para FOTOS DE CELULAR).
-    4. Se arma un HojaLeida por cada imagen, con lo que leyó OMRChecker.
+    1. Preparar las imágenes: cada página del PDF del escáner se convierte en
+       una imagen.
+    2. OMRChecker lee esas imágenes con template.json.
+    3. Se arma un HojaLeida por cada imagen, con lo que leyó OMRChecker.
+
+    CalificaTAP lee SOLO PDF del escáner: en las pruebas reales con hojas
+    impresas, los PDF se leyeron perfecto y las fotos de celular no.
 
 OMRChecker se ejecuta como un programa aparte (subprocess). Así, si algo
 falla dentro de él, la ventana de CalificaTAP no se cierra.
@@ -34,8 +35,7 @@ from ..examenes import Examen, listar_examenes
 from ..generador.plantilla_omr import nombre_plantilla
 from .hojas import ERROR, HojaLeida
 
-EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
-EXTENSIONES_ADMITIDAS = EXTENSIONES_IMAGEN | {".pdf"}
+EXTENSIONES_ADMITIDAS = {".pdf"}     # solo PDF del escáner
 DPI_PDF = 200   # resolución al convertir PDF escaneados en imágenes
 
 # Tipo de la función que avisa el avance: avance(hechas, total, mensaje)
@@ -69,7 +69,7 @@ def _nombre_libre(carpeta: Path, nombre: str) -> str:
 
 def preparar_imagenes(archivos: list[Path], destino: Path) -> dict[str, str]:
     """
-    Copia/convierte los archivos a imágenes dentro de 'destino'.
+    Convierte cada página de los PDF en una imagen dentro de 'destino'.
     Devuelve {nombre_imagen: nombre_archivo_original}.
     """
     destino.mkdir(parents=True, exist_ok=True)
@@ -83,10 +83,6 @@ def preparar_imagenes(archivos: list[Path], destino: Path) -> dict[str, str]:
                     pix = pagina.get_pixmap(dpi=DPI_PDF, colorspace=fitz.csGRAY)
                     pix.save(str(destino / nombre))
                     origen_de[nombre] = f"{archivo.name} (pág. {n})"
-        elif ext in EXTENSIONES_IMAGEN:
-            nombre = _nombre_libre(destino, archivo.name)
-            shutil.copy(archivo, destino / nombre)
-            origen_de[nombre] = archivo.name
     return origen_de
 
 
@@ -158,34 +154,24 @@ def _leer_con_plantilla(examen: Examen, omrchecker: Path, trabajo: Path, todas: 
                         imagenes: list[str], hoja: int | str, etapa: str,
                         progreso: "Progreso") -> dict[str, tuple[dict, Path]]:
     """
-    Lee 'imagenes' con la plantilla de una hoja (o la de "identificar"), en dos
-    pasadas: primero la de escáner y, con las que fallen, la de fotos.
+    Lee 'imagenes' con la plantilla de una hoja (o la de "identificar").
     Devuelve {imagen: (fila_del_csv, imagen_revisada)} con las que sí se leyeron.
     """
-    leidas: dict[str, tuple[dict, Path]] = {}
-    pendientes = list(imagenes)
     base = progreso.hechas                   # lo que ya se había avanzado antes de esta etapa
-    for fotos, mensaje in ((False, "Leyendo hojas…"), (True, "Reintentando las fotos difíciles…")):
-        if not pendientes:
-            break
-        nombre = f"{etapa}_{'fotos' if fotos else 'escaner'}"
-        entrada, salida = trabajo / f"entrada_{nombre}", trabajo / f"salida_{nombre}"
-        entrada.mkdir(parents=True)
-        # OMRChecker busca estos archivos junto a las imágenes
-        shutil.copy(examen.carpeta / nombre_plantilla(hoja, fotos), entrada / "template.json")
-        shutil.copy(examen.carpeta / "config.json", entrada / "config.json")
-        shutil.copy(examen.carpeta / "omr_marker.jpg", entrada / "omr_marker.jpg")
-        for imagen in pendientes:
-            shutil.copy(todas / imagen, entrada / imagen)
+    entrada, salida = trabajo / f"entrada_{etapa}", trabajo / f"salida_{etapa}"
+    entrada.mkdir(parents=True)
+    # OMRChecker busca estos archivos junto a las imágenes
+    shutil.copy(examen.carpeta / nombre_plantilla(hoja), entrada / "template.json")
+    shutil.copy(examen.carpeta / "config.json", entrada / "config.json")
+    shutil.copy(examen.carpeta / "omr_marker.jpg", entrada / "omr_marker.jpg")
+    for imagen in imagenes:
+        shutil.copy(todas / imagen, entrada / imagen)
 
-        ya_hechas = base + len(imagenes) - len(pendientes)
-        _ejecutar_omrchecker(omrchecker, entrada, salida, len(pendientes),
-                             ya_hechas, progreso.total, progreso.avance, mensaje)
-        resultados = _leer_resultados(salida)
-        for imagen in list(pendientes):
-            if imagen in resultados:
-                leidas[imagen] = (resultados[imagen], salida / "CheckedOMRs" / imagen)
-                pendientes.remove(imagen)
+    _ejecutar_omrchecker(omrchecker, entrada, salida, len(imagenes),
+                         base, progreso.total, progreso.avance, "Leyendo hojas…")
+    resultados = _leer_resultados(salida)
+    leidas = {img: (resultados[img], salida / "CheckedOMRs" / img)
+              for img in imagenes if img in resultados}
     progreso.hechas = base + len(imagenes)   # leídas o no, esta etapa ya terminó
     return leidas
 
@@ -223,7 +209,7 @@ def leer_hojas(examen: Examen, archivos: list[Path], raiz_proyecto: Path,
     origen_de = preparar_imagenes(archivos, todas)
     total = len(origen_de)
     if total == 0:
-        raise ErrorDeLectura("Ninguno de los archivos es un PDF o una imagen.")
+        raise ErrorDeLectura("Ninguno de los archivos es un PDF.")
 
     imagenes = list(origen_de)
     n_hojas = examen.numero_hojas

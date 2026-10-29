@@ -7,7 +7,7 @@ prueba_omrchecker.py — Prueba de extremo a extremo del Módulo 1.
        y un número de documento, usando la MISMA maqueta.
     3. Convierte esa hoja en imagen de dos formas:
          - escaneo: derecha y limpia
-         - foto:    girada, en perspectiva, con fondo, sombra y ruido (como un celular)
+         - torcido: girada un poco y con algo de ruido (la hoja entró torcida al escáner)
     4. Ejecuta OMRChecker con el template.json generado.
     5. Compara lo que leyó OMRChecker con lo que "marcó el estudiante".
 
@@ -54,25 +54,15 @@ def respuestas_al_azar(maqueta, semilla: int, prob_blanco: float = 0.05) -> dict
     return marcas
 
 
-def simular_foto(imagen: np.ndarray, semilla: int) -> np.ndarray:
-    """Distorsiona una imagen limpia para que parezca una foto de celular."""
+def simular_escaneo_torcido(imagen: np.ndarray, semilla: int) -> np.ndarray:
+    """Gira un poco la hoja y le agrega ruido, como si entrara torcida al escáner."""
     azar = np.random.default_rng(semilla)
     h, w = imagen.shape
-    # 1. Ponemos la hoja sobre un "pupitre" gris más grande
-    fondo = np.full((int(h * 1.25), int(w * 1.25)), 110, np.uint8)
-    dy, dx = (fondo.shape[0] - h) // 2, (fondo.shape[1] - w) // 2
-    fondo[dy:dy + h, dx:dx + w] = imagen
-    # 2. Perspectiva: movemos un poco cada esquina de la hoja
-    esquinas = np.float32([[dx, dy], [dx + w, dy], [dx + w, dy + h], [dx, dy + h]])
-    movidas = esquinas + azar.uniform(-0.03, 0.03, esquinas.shape).astype(np.float32) * w
-    matriz = cv2.getPerspectiveTransform(esquinas, movidas)
-    foto = cv2.warpPerspective(fondo, matriz, (fondo.shape[1], fondo.shape[0]), borderValue=110)
-    # 3. Sombra suave (más oscuro hacia un lado) + desenfoque + ruido
-    gradiente = np.linspace(0.75, 1.0, foto.shape[1])[None, :]
-    foto = foto.astype(np.float32) * gradiente
-    foto = cv2.GaussianBlur(foto, (5, 5), 0)
-    foto += azar.normal(0, 6, foto.shape)
-    return np.clip(foto, 0, 255).astype(np.uint8)
+    angulo = azar.uniform(1.0, 2.0) * azar.choice([-1, 1])        # grados
+    matriz = cv2.getRotationMatrix2D((w / 2, h / 2), angulo, 1.0)
+    torcida = cv2.warpAffine(imagen, matriz, (w, h), borderValue=255)
+    torcida = torcida.astype(np.float32) + azar.normal(0, 4, torcida.shape)
+    return np.clip(torcida, 0, 255).astype(np.uint8)
 
 
 def leer_resultados(carpeta_salida: Path) -> list[dict]:
@@ -108,25 +98,22 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
 
-        # Hoja diligenciada → imagen limpia (escáner) y foto simulada (celular)
+        # Hoja diligenciada → imagen limpia y otra torcida (las dos, como de escáner)
         dibujar_pdf(maqueta, tmp / "diligenciada.pdf", marcas=marcas)
         limpia = pdf_a_imagen(tmp / "diligenciada.pdf", escala=150 / 72)  # 150 DPI
         casos = {
-            # nombre del caso: (imagen, plantilla que le corresponde)
-            "escaneo": (limpia, "template.json"),
-            "foto": (simular_foto(limpia, args.semilla), "template_fotos.json"),
+            "escaneo": limpia,
+            "torcido": simular_escaneo_torcido(limpia, args.semilla),
         }
 
         todo_bien = True
         total = len(maqueta.etiquetas_preguntas)
-        for caso, (imagen, plantilla) in casos.items():
-            # Cada caso en su propia carpeta, con su plantilla llamada template.json
+        for caso, imagen in casos.items():
+            # Cada caso en su propia carpeta, con template.json, config.json y la marca
             entrada, salida = tmp / caso / "entrada", tmp / caso / "salida"
             entrada.mkdir(parents=True)
             guardar_archivos_omr(maqueta, entrada)
-            # OMRChecker solo lee "template.json": ponemos ahí la plantilla de este caso
-            (entrada / plantilla).replace(entrada / "template.json")
-            (entrada / "template_fotos.json").unlink(missing_ok=True)
+            (entrada / "template_identificar.json").unlink(missing_ok=True)
             cv2.imwrite(str(entrada / f"{caso}.jpg"), imagen)
 
             comando = args.prefijo.split() + [sys.executable, "main.py",

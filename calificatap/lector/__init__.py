@@ -1,1 +1,1 @@
-"""Módulo 2 — Lector (pendiente): procesa escaneos/fotos con OMRChecker."""
+"""Módulo 2 — Lector (pendiente): lee los PDF del escáner con OMRChecker."""

@@ -1,15 +1,15 @@
 """
 plantilla_omr.py — Convierte la Maqueta en los archivos que necesita OMRChecker:
 
-    template.json        → dónde está cada burbuja y qué significa (para ESCÁNER)
-    template_fotos.json  → igual, pero primero recorta la hoja del fondo (para FOTOS)
+    template.json        → dónde está cada burbuja y qué significa
+                           (las hojas se leen desde el PDF del ESCÁNER)
     omr_marker.jpg  → imagen de la marca de alineación (para encontrarla en el escaneo)
     config.json     → ajustes de procesamiento de OMRChecker
 
 ¿CÓMO VE OMRChecker LA HOJA?
-    1. Busca las 4 marcas de las esquinas en la foto o el escaneo.
+    1. Busca las 4 marcas de las esquinas en el escaneo.
     2. "Endereza" la imagen tomando como esquinas los CENTROS de esas 4 marcas
-       (corrige rotación, inclinación y perspectiva de la foto).
+       (corrige si la hoja entró un poco torcida al escáner).
     3. Estira esa imagen enderezada al tamaño 'pageDimensions'.
     4. Busca cada burbuja en las coordenadas (en píxeles) del template.json.
 
@@ -80,15 +80,13 @@ def _bloque_a_omr(bloque: BloqueCampos, conv: ConversorCoordenadas) -> dict:
     }
 
 
-def construir_template(maqueta: Maqueta, para_fotos: bool = False,
-                       solo_identificar: bool = False) -> dict:
+def construir_template(maqueta: Maqueta, solo_identificar: bool = False) -> dict:
     """
     Arma el diccionario que se guardará como template.json.
 
-    para_fotos=True agrega el paso CropPage: en una foto de celular la hoja
-    está sobre un pupitre o una mesa, y conviene recortarla del fondo ANTES de
-    buscar las marcas. En un escaneo la hoja ocupa toda la imagen y ese paso
-    sobra (incluso puede fallar), por eso hay dos plantillas.
+    (Antes había una segunda plantilla para fotos de celular, con un paso extra
+    "CropPage" que recorta la hoja del fondo. En las pruebas reales las fotos no
+    funcionaron bien, así que CalificaTAP lee solo PDF del escáner.)
 
     solo_identificar=True arma una plantilla que lee ÚNICAMENTE la franja de
     abajo (código del examen y número de hoja). Sirve, en exámenes de varias
@@ -105,21 +103,19 @@ def construir_template(maqueta: Maqueta, para_fotos: bool = False,
     diametro_px = round(conv.longitud(d.DIAMETRO_BURBUJA))
 
     # Preprocesadores: pasos que OMRChecker aplica a la imagen antes de leerla
-    preprocesadores = []
-    if para_fotos:
-        preprocesadores.append({"name": "CropPage", "options": {"morphKernel": [10, 10]}})
-    preprocesadores.append({
+    preprocesadores = [{
         "name": "CropOnMarkers",
         "options": {
             "relativePath": NOMBRE_IMAGEN_MARCADOR,
             # Cuántas veces cabe la marca en el ancho de la hoja. OMRChecker lo usa
             # para saber de qué tamaño buscar la marca.
             "sheetToMarkerWidthRatio": round(d.ANCHO_PAGINA / d.LADO_MARCADOR),
-            # Busca la marca entre el 40 % y el 110 % de ese tamaño (fotos de lejos/cerca)
+            # Busca la marca entre el 40 % y el 110 % de ese tamaño
+            # (por si el escáner o la impresora cambiaron un poco la escala)
             "marker_rescale_range": [40, 110],
             "marker_rescale_steps": 14,
         },
-    })
+    }]
 
     franja = set(maqueta.etiquetas_codigo + maqueta.etiquetas_hoja)
     bloques = {b.nombre: _bloque_a_omr(b, conv) for b in maqueta.bloques
@@ -186,15 +182,15 @@ def guardar_imagen_marcador(ruta: str | Path, pixeles_por_modulo: int = 20) -> N
     cv2.imwrite(str(ruta), imagen)
 
 
-def nombre_plantilla(hoja: int | str = 1, para_fotos: bool = False) -> str:
+def nombre_plantilla(hoja: int | str = 1) -> str:
     """
     Nombres de los archivos de plantilla:
-        hoja 1 → template.json / template_fotos.json
-        hoja 2 → template_hoja2.json / template_fotos_hoja2.json
-        "identificar" → template_identificar.json / template_fotos_identificar.json
+        hoja 1 → template.json
+        hoja 2 → template_hoja2.json
+        "identificar" → template_identificar.json
     """
     sufijo = "" if hoja == 1 else (f"_hoja{hoja}" if isinstance(hoja, int) else f"_{hoja}")
-    return f"template{'_fotos' if para_fotos else ''}{sufijo}.json"
+    return f"template{sufijo}.json"
 
 
 def _escribir(ruta: Path, contenido: dict) -> None:
@@ -203,17 +199,17 @@ def _escribir(ruta: Path, contenido: dict) -> None:
 
 def guardar_archivos_omr(maqueta: Maqueta | list[Maqueta], carpeta: str | Path) -> dict:
     """
-    Escribe las plantillas (una pareja escáner/fotos por cada hoja, más la de
-    identificar), config.json y omr_marker.jpg. Acepta una hoja o la lista de hojas.
+    Escribe las plantillas (una por cada hoja, más la de identificar),
+    config.json y omr_marker.jpg. Acepta una hoja o la lista de hojas.
     """
     carpeta = Path(carpeta)
     hojas = maqueta if isinstance(maqueta, list) else [maqueta]
+    for vieja in carpeta.glob("template_fotos*.json"):   # de versiones que leían fotos
+        vieja.unlink()
     for h in hojas:
-        for fotos in (False, True):
-            _escribir(carpeta / nombre_plantilla(h.hoja, fotos), construir_template(h, fotos))
-    for fotos in (False, True):
-        _escribir(carpeta / nombre_plantilla("identificar", fotos),
-                  construir_template(hojas[0], fotos, solo_identificar=True))
+        _escribir(carpeta / nombre_plantilla(h.hoja), construir_template(h))
+    _escribir(carpeta / nombre_plantilla("identificar"),
+              construir_template(hojas[0], solo_identificar=True))
     template = construir_template(hojas[0])
     (carpeta / "config.json").write_text(
         json.dumps(construir_config_omr(), indent=2), encoding="utf-8")
