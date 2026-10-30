@@ -88,6 +88,8 @@ class PestanaCuadernillos(ttk.Frame):
         ttk.Button(fila, text="📄 Traer de un Word…", command=self.importar_word).pack(side="left")
         ttk.Button(fila, text="Word de ejemplo", style="Pequeno.TButton",
                    command=self.word_ejemplo).pack(side="left", padx=6)
+        ttk.Button(marco, text="📚 Biblioteca de preguntas del colegio",
+                   command=self.ver_biblioteca).pack(fill="x", pady=(6, 0))
         ttk.Label(marco, text="Con Excel:", style="Panel.TLabel").pack(anchor="w", pady=(8, 2))
         fila = ttk.Frame(marco, style="Panel.TFrame")
         fila.pack(fill="x")
@@ -223,7 +225,16 @@ class PestanaCuadernillos(ttk.Frame):
         def al_cerrar():
             self.btn_plantilla.configure(text="📥 Crear de nuevo")
             self.revisar_banco(silencioso=True)
-        EditorPreguntas(self, examen, al_cerrar=al_cerrar)
+        EditorPreguntas(self, examen, al_cerrar=al_cerrar,
+                        carpeta_biblioteca=self.raiz / "biblioteca")
+
+    def ver_biblioteca(self) -> None:
+        """Ver, buscar y borrar las preguntas guardadas (para traerlas, use el editor)."""
+        from ..cuadernillos.biblioteca import Biblioteca
+        from .ventana_biblioteca import VentanaBiblioteca
+        VentanaBiblioteca(self, Biblioteca(self.raiz / "biblioteca"),
+                          destino="Para poner preguntas en un examen: abra «Escribir las "
+                                  "preguntas» y use «📚 Traer de la biblioteca».")
 
     def word_ejemplo(self) -> None:
         """Guarda un Word de ejemplo con el formato que entiende el programa y lo abre."""

@@ -33,10 +33,15 @@ def revisar_texto(texto: str, materia: MateriaExamen) -> tuple[bool, str]:
     Devuelve (está_bien, mensaje corto para mostrar al lado).
     """
     letras = texto_a_letras(texto)
-    validas = "ABCDEFGH"[: materia.opciones]
-    malas = sorted({c for c in letras if c not in validas})
-    if malas:
-        return False, f"«{', '.join(malas)}» no es opción (solo {validas[0]}–{validas[-1]})"
+    # Cada pregunta puede tener su propio número de opciones (materias por partes)
+    for etiqueta, letra in zip(materia.etiquetas(), letras):
+        validas = "ABCDEFGH"[: materia.opciones_de(etiqueta)]
+        if letra not in validas:
+            numero = int(etiqueta.rsplit("_", 1)[1])
+            return False, f"«{letra}» no es opción de la {numero}.ª (solo {validas[0]}–{validas[-1]})"
+    if any(c not in "ABCDEFGH" for c in letras):
+        malas = sorted({c for c in letras if c not in "ABCDEFGH"})
+        return False, f"«{', '.join(malas)}» no es una opción"
     if len(letras) < materia.preguntas:
         return False, f"{len(letras)}/{materia.preguntas} · faltan {materia.preguntas - len(letras)}"
     if len(letras) > materia.preguntas:

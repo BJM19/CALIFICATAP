@@ -272,6 +272,20 @@ def vista_previa_pregunta(examen: Examen, banco: Banco, etiqueta: str, zoom: flo
     Imagen (PIL) de UNA pregunta tal como saldrá en el cuadernillo (forma A),
     con su texto compartido si tiene. La usa el editor de preguntas.
     """
+    numeros = examen.numeros_impresos()
+    p = banco.preguntas[etiqueta]
+    contexto, desde, hasta = None, None, None
+    if p.contexto and p.contexto in banco.contextos:
+        # el rango de preguntas que comparten este texto
+        mismas = [e for e in examen.todas_las_etiquetas()
+                  if e in banco.preguntas and banco.preguntas[e].contexto == p.contexto]
+        contexto, desde, hasta = banco.contextos[p.contexto], numeros[mismas[0]], numeros[mismas[-1]]
+    return vista_previa_suelta(p, numeros[etiqueta], contexto, desde, hasta, zoom)
+
+
+def vista_previa_suelta(p, numero: int, contexto=None, desde: int | None = None,
+                        hasta: int | None = None, zoom: float = 1.6):
+    """Imagen (PIL) de una pregunta cualquiera (también las de la biblioteca)."""
     from reportlab.platypus import SimpleDocTemplate
     try:
         import pymupdf as fitz
@@ -279,23 +293,17 @@ def vista_previa_pregunta(examen: Examen, banco: Banco, etiqueta: str, zoom: flo
         import fitz
     normal, negrita = _registrar_letra()
     est = _estilos(normal, negrita)
-    numeros = examen.numeros_impresos()
-    p = banco.preguntas[etiqueta]
-    opciones = list(p.opciones)
-    while opciones and not opciones[-1]:
-        opciones.pop()
-    pf = PreguntaEnForma(etiqueta, etiqueta, LETRAS[:len(opciones)])
+    n = len(p.opciones)
+    while n and p.opcion_vacia(n - 1):
+        n -= 1
+    pf = PreguntaEnForma(p.etiqueta, p.etiqueta, LETRAS[:n])
     historia = []
-    if p.contexto and p.contexto in banco.contextos:
-        # el rango de preguntas que comparten este texto
-        mismas = [e for e in examen.todas_las_etiquetas()
-                  if e in banco.preguntas and banco.preguntas[e].contexto == p.contexto]
-        historia += _bloque_contexto(banco.contextos[p.contexto], numeros[mismas[0]],
-                                     numeros[mismas[-1]], est)
-    historia += _pregunta(pf, banco, numeros, est)
+    if contexto is not None:
+        historia += _bloque_contexto(contexto, desde or numero, hasta or numero, est)
+    banco = Banco({p.etiqueta: p}, {}, [])
+    historia += _pregunta(pf, banco, {p.etiqueta: numero}, est)
     memoria = io.BytesIO()
-    alto = 60 * cm
-    doc = SimpleDocTemplate(memoria, pagesize=(ANCHO_COLUMNA + 24, alto), leftMargin=12,
+    doc = SimpleDocTemplate(memoria, pagesize=(ANCHO_COLUMNA + 24, 60 * cm), leftMargin=12,
                             rightMargin=12, topMargin=12, bottomMargin=12)
     try:
         doc.build(historia)
@@ -321,11 +329,46 @@ def _pregunta(pf: PreguntaEnForma, banco: Banco, numeros: dict, est) -> list:
         imagen = _imagen(p.imagen, ANCHO_COLUMNA - 17)
         if imagen:
             bloque += [Spacer(1, 2), imagen, Spacer(1, 4)]
-    for posicion, letra_banco in zip(LETRAS, pf.opciones):
-        texto = p.opciones[LETRAS.index(letra_banco)]
-        bloque.append(Paragraph(f"<b>{posicion}.</b>&nbsp;&nbsp;{_parrafos(texto)}", est["opcion"]))
+    pares = [(posicion, LETRAS.index(letra_banco)) for posicion, letra_banco in zip(LETRAS, pf.opciones)]
+    if any(p.imagen_de_opcion(i) for _, i in pares):
+        bloque.append(_opciones_con_imagen(p, pares, est))
+    else:
+        for posicion, i in pares:
+            texto = p.opciones[i] if i < len(p.opciones) else ""
+            bloque.append(Paragraph(f"<b>{posicion}.</b>&nbsp;&nbsp;{_parrafos(texto)}",
+                                    est["opcion"]))
     bloque.append(Spacer(1, 9))
     return bloque
+
+
+def _opciones_con_imagen(p, pares: list[tuple[str, int]], est) -> Table:
+    """
+    Opciones con imagen (ej. «¿Cuál gráfica representa...?»): en una cuadrícula de
+    dos columnas, cada celda con la letra, la imagen y el texto (si tiene).
+    """
+    ancho_celda = (ANCHO_COLUMNA - 17) / 2
+    celdas = []
+    for posicion, i in pares:
+        contenido = [Paragraph(f"<b>{posicion}.</b>", est["opcion"].clone(
+            "letra_img", leftIndent=0, firstLineIndent=0))]
+        datos = p.imagen_de_opcion(i)
+        if datos:
+            imagen = _imagen(datos, ancho_celda - 10, alto_max=4.5 * cm)
+            if imagen:
+                contenido.append(imagen)
+        texto = p.opciones[i] if i < len(p.opciones) else ""
+        if texto:
+            contenido.append(Paragraph(_parrafos(texto), est["opcion"].clone(
+                "opc_img", leftIndent=0, firstLineIndent=0, alignment=TA_CENTER)))
+        celdas.append(contenido)
+    filas = [celdas[k:k + 2] for k in range(0, len(celdas), 2)]
+    if len(filas[-1]) == 1:
+        filas[-1].append("")
+    tabla = Table(filas, colWidths=[ancho_celda] * 2, hAlign="RIGHT")
+    tabla.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("TOPPADDING", (0, 0), (-1, -1), 2),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    return tabla
 
 
 def _portada(examen, forma, preguntas, numeros, colegio, datos_examen, tiempo,

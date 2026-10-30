@@ -35,6 +35,7 @@ from ..examenes import Examen
 from ..lector.hojas import ERROR, HojaLeida, normalizar_documento
 from ..cuadernillos.formas import a_letra_original, cargar_mapa
 from .clave import cargar_anuladas
+from .estudiantes import documento_por_numero
 
 
 @dataclass
@@ -235,6 +236,7 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
     # hojas, cada estudiante entrega varias: se juntan por el documento).
     nombres = dict(zip(estudiantes["documento"], estudiantes["nombre"]))
     cursos = dict(zip(estudiantes["documento"], estudiantes["curso"]))
+    por_numero = documento_por_numero(estudiantes) if examen.por_lista else {}
     n_hojas = examen.numero_hojas
     grupos: dict[str, dict[int, HojaLeida]] = {}
     for h in hojas:
@@ -243,8 +245,13 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
             continue
         doc = normalizar_documento(h.documento)
         if not doc:
-            alertas.append(("Sin documento", f"{h.origen}: la hoja no tiene documento."))
+            que = "N.º de lista" if examen.por_lista else "documento"
+            alertas.append(("Sin documento", f"{h.origen}: la hoja no tiene {que}."))
             doc = f"(sin documento) {h.archivo}"
+        elif examen.por_lista:
+            # Hoja con N.º de lista: el 7 es el 7.º estudiante de la lista. Se usa
+            # su documento, así el seguimiento y los boletines funcionan igual.
+            doc = por_numero.get(doc, f"N.º {doc}")
         grupo = grupos.setdefault(doc, {})
         if h.hoja in grupo:
             hoja_txt = f" (hoja {h.hoja})" if n_hojas > 1 else ""
@@ -360,7 +367,7 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
 
     # --- 4. Por pregunta (y por forma: la pregunta 5 de la forma B puede ser otra) ---
     nombre_materia = {e: m.nombre for m in materias for e in m.etiquetas()}
-    opciones_de = {e: m.opciones for m in materias for e in m.etiquetas()}
+    opciones_de = {e: m.opciones_de(e) for m in materias for e in m.etiquetas()}
     filas_pregunta = []
 
     # Si los cuadernillos los armó CalificaTAP (formas.json), se sabe qué pregunta

@@ -81,14 +81,18 @@ def crear_curso_de_practica(examen: Examen, destino: str | Path, estudiantes: in
     pdf_curso = fitz.open()
     lista = []
     if lista_fija:
-        candidatos = [(d, n) for d, n in lista_fija if len(d) <= digitos]
+        # (documento, nombre) o (documento, nombre, N.º de lista)
+        candidatos = ([tuple(e) for e in lista_fija][:99] if conf.por_lista
+                      else [tuple(e) for e in lista_fija if len(e[0]) <= digitos])
     else:
-        candidatos = [(str(azar.randint(10**9, 1_199_999_999))[:digitos],
+        candidatos = [(str(azar.randint(10**9, 1_199_999_999))[:max(digitos, 8)],
                        f"{azar.choice(NOMBRES)} {azar.choice(APELLIDOS)} {azar.choice(APELLIDOS)}")
                       for _ in range(estudiantes)]
-    for i, (documento, nombre) in enumerate(candidatos):
+    for i, (documento, nombre, *numero) in enumerate(candidatos):
         forma = formas[i % len(formas)]
         lista.append((documento, nombre))
+        # Lo que va en la hoja: el documento, o el N.º de lista (su posición: 1, 2, 3...)
+        en_la_hoja = (numero[0] if numero else str(i + 1)) if conf.por_lista else documento
         habilidad = min(0.97, _habilidad_base(documento) + mejora + azar.uniform(-0.05, 0.05))
 
         # Lo que "marcó" este estudiante en todo el examen
@@ -102,12 +106,12 @@ def crear_curso_de_practica(examen: Examen, destino: str | Path, estudiantes: in
         for h in hojas:
             if con_nombre:
                 # Hoja personalizada: nombre, documento y forma ya vienen impresos
-                pagina = pagina_personalizada(h, documento, nombre, f"{examen.grado}-01",
+                pagina = pagina_personalizada(h, en_la_hoja, nombre, f"{examen.grado}-01",
                                               forma if examen.letras_formas else "")
             else:
-                # Hoja en blanco: el estudiante rellena su documento y su forma
-                pagina = Pagina(marcas={f"doc{k + 1:02d}": d
-                                        for k, d in enumerate(documento.zfill(digitos))})
+                # Hoja en blanco: el estudiante rellena su documento (o N.º) y su forma
+                pagina = Pagina(marcas=dict(zip(
+                    h.etiquetas_documento, en_la_hoja.zfill(len(h.etiquetas_documento)))))
                 if examen.letras_formas:
                     pagina.marcas["forma"] = forma
             pagina.marcas.update({e: v for e, v in respuestas.items()

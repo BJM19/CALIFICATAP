@@ -26,7 +26,7 @@ from tkinter import filedialog, messagebox, ttk
 import pandas as pd
 from PIL import ImageTk
 
-from ..generador.configuracion import ErrorDeConfiguracion
+from ..generador.configuracion import ErrorDeConfiguracion, partes_a_texto, texto_a_partes
 from ..generador.generar import estructura, generar_desde_datos, nombre_de_carpeta
 from ..generador.maquetador import ErrorDeMaquetacion
 from . import estilos
@@ -42,6 +42,16 @@ PLANTILLA_SABER_11 = [
     {"nombre": "Sociales y Ciudadanas", "preguntas": 20, "opciones": 4},
     {"nombre": "Inglés", "preguntas": 15, "opciones": 3},
 ]
+
+def _texto_opciones(m: dict) -> str:
+    """Columna «Opciones» de la tabla: '4', o '3 a 8' si la materia tiene partes."""
+    valores = [m["opciones"]] + [p["opciones"] for p in m.get("partes") or []]
+    return str(m["opciones"]) if len(set(valores)) == 1 else f"{min(valores)} a {max(valores)}"
+
+
+# Cómo se identifica el estudiante en la hoja ("documento" o "lista")
+TEXTOS_IDENTIFICACION = ["Su número de documento",
+                         "Su N.º de lista (caben más preguntas)"]
 
 # Texto que se muestra en la lista de "opciones por pregunta"
 LETRAS = "ABCDEFGH"
@@ -90,6 +100,7 @@ class PestanaGenerador(ttk.Frame):
         self.var_grado = tk.StringVar()
         self.var_fecha = tk.StringVar()
         self.var_digitos = tk.StringVar(value="10")
+        self.var_identificacion = tk.StringVar(value=TEXTOS_IDENTIFICACION[0])
         self.var_numeracion = tk.StringVar(value="continua")
         self.var_formas = tk.StringVar(value=TEXTOS_FORMAS[0])
         self.var_repartir = tk.BooleanVar(value=True)
@@ -98,16 +109,18 @@ class PestanaGenerador(ttk.Frame):
         self.var_m_preguntas = tk.StringVar()
         self.var_m_opciones = tk.StringVar()
         self.var_m_codigo = tk.StringVar()
+        self.var_m_partes = tk.StringVar()
 
         # Cualquier cambio en estas variables → actualizar la vista previa
         for var in (self.var_colegio, self.var_municipio, self.var_logo, self.var_examen,
                     self.var_grado, self.var_fecha, self.var_digitos, self.var_numeracion,
-                    self.var_formas):
+                    self.var_formas, self.var_identificacion):
             var.trace_add("write", lambda *_: self._programar_vista_previa())
         # Cambios en el editor de materia → copiar a la materia seleccionada
         for var in (self.var_m_nombre, self.var_m_preguntas, self.var_m_opciones):
             var.trace_add("write", lambda *_: self._editor_cambio())
         self.var_m_codigo.trace_add("write", lambda *_: self._editor_cambio(codigo_manual=True))
+        self.var_m_partes.trace_add("write", lambda *_: self._editor_cambio())
 
     # ======================================================================
     # 2. Construcción de la interfaz
@@ -261,23 +274,47 @@ class PestanaGenerador(ttk.Frame):
         self._fila(self.editor, 3, "Código:",
                    ttk.Entry(self.editor, textvariable=self.var_m_codigo, width=10),
                    "Se llena solo. Identifica la materia en los reportes.")
+        self._fila(self.editor, 4, "Por partes:",
+                   ttk.Entry(self.editor, textvariable=self.var_m_partes),
+                   "Opcional, si no todas las preguntas tienen las mismas opciones (como "
+                   "Inglés del ICFES). Ej.: 1-5: 8, 6-10: 3  → las preguntas 1 a 5 de esta "
+                   "materia con A–H y la 6 a la 10 con A–C. Las demás usan «Opciones».")
+        self.lbl_partes = ttk.Label(self.editor, style="Ayuda.TLabel", foreground=estilos.ROJO)
+        self.lbl_partes.grid(row=10, column=1, sticky="w")
 
     def _seccion_opciones(self, padre) -> None:
         marco = self._seccion(padre, "4. Opciones")
-        self._fila(marco, 0, "Dígitos del documento:",
-                   ttk.Spinbox(marco, from_=4, to=12, width=8, textvariable=self.var_digitos),
+        self._fila(marco, 0, "El estudiante marca:",
+                   ttk.Combobox(marco, values=TEXTOS_IDENTIFICACION, state="readonly", width=34,
+                                textvariable=self.var_identificacion),
+                   "Con «N.º de lista» la parte de arriba de la hoja es más pequeña (y las "
+                   "instrucciones, más cortas): caben unas 50 preguntas más por hoja. El "
+                   "programa reconoce al estudiante por su posición en la lista del curso.")
+        self.spin_digitos = ttk.Spinbox(marco, from_=4, to=12, width=8,
+                                        textvariable=self.var_digitos)
+        self._fila(marco, 1, "Dígitos del documento:", self.spin_digitos,
                    "Cuántas cifras tiene el documento más largo de sus estudiantes.")
+        self.var_identificacion.trace_add("write", lambda *_: self._cambio_identificacion())
         caja = ttk.Frame(marco, style="Panel.TFrame")
         ttk.Radiobutton(caja, text="1, 2, 3… seguido en toda la hoja",
                         variable=self.var_numeracion, value="continua").pack(anchor="w")
         ttk.Radiobutton(caja, text="Cada materia empieza en 1",
                         variable=self.var_numeracion, value="por_materia").pack(anchor="w")
-        self._fila(marco, 1, "Numeración:", caja)
-        self._fila(marco, 2, "Formas:",
+        self._fila(marco, 2, "Numeración:", caja)
+        self._fila(marco, 3, "Formas:",
                    ttk.Combobox(marco, values=TEXTOS_FORMAS, state="readonly",
                                 textvariable=self.var_formas),
                    "Opcional. Con varias formas (A, B...) cada una tiene su propia clave; "
                    "sirve para que los estudiantes no se copien.")
+
+    def _por_lista(self) -> bool:
+        return self.var_identificacion.get() == TEXTOS_IDENTIFICACION[1]
+
+    def _cambio_identificacion(self) -> None:
+        """Con N.º de lista no se usan los dígitos del documento."""
+        self.spin_digitos.configure(state="disabled" if self._por_lista() else "normal")
+        if hasattr(self, "lbl_lista"):
+            self._actualizar_lbl_lista()
 
     def _seccion_lista(self, padre) -> None:
         marco = self._seccion(padre, "5. Hojas con nombre (opcional)")
@@ -303,9 +340,12 @@ class PestanaGenerador(ttk.Frame):
 
     def _actualizar_lbl_lista(self) -> None:
         n = len(self.lista_estudiantes)
-        self.lbl_lista.configure(
-            text=f"✔ {n} estudiantes: se imprimirán {n} hojas con nombre." if n
-            else "Sin lista: se imprime solo la hoja en blanco.")
+        texto = (f"✔ {n} estudiantes: se imprimirán {n} hojas con nombre." if n
+                 else "Sin lista: se imprime solo la hoja en blanco.")
+        if self._por_lista():
+            texto += ("\nN.º de lista = el orden del archivo (el primero es el 1). Use la "
+                      "misma lista, en el mismo orden, al calificar.")
+        self.lbl_lista.configure(text=texto)
         if n and self.var_formas.get() != TEXTOS_FORMAS[0]:
             self.chk_repartir.grid()
         else:
@@ -358,7 +398,7 @@ class PestanaGenerador(ttk.Frame):
         """Vuelve a llenar la tabla a partir de self.materias."""
         self.tabla.delete(*self.tabla.get_children())
         for m in self.materias:
-            self.tabla.insert("", "end", values=(m["nombre"], m["preguntas"], m["opciones"]))
+            self.tabla.insert("", "end", values=(m["nombre"], m["preguntas"], _texto_opciones(m)))
         if seleccionar is not None and self.materias:
             seleccionar = max(0, min(seleccionar, len(self.materias) - 1))
             fila = self.tabla.get_children()[seleccionar]
@@ -412,7 +452,7 @@ class PestanaGenerador(ttk.Frame):
         self._cargando = True
         if i is None:
             for var in (self.var_m_nombre, self.var_m_preguntas,
-                        self.var_m_opciones, self.var_m_codigo):
+                        self.var_m_opciones, self.var_m_codigo, self.var_m_partes):
                 var.set("")
             self._habilitar_editor(False)
         else:
@@ -421,6 +461,8 @@ class PestanaGenerador(ttk.Frame):
             self.var_m_preguntas.set(str(m["preguntas"]))
             self.var_m_opciones.set(TEXTOS_OPCIONES[m["opciones"] - 2])
             self.var_m_codigo.set(m["codigo"])
+            self.var_m_partes.set(partes_a_texto(m.get("partes")))
+            self.lbl_partes.configure(text="")
             self._habilitar_editor(True)
         self._cargando = False
 
@@ -450,6 +492,17 @@ class PestanaGenerador(ttk.Frame):
         if self.var_m_opciones.get() in TEXTOS_OPCIONES:
             m["opciones"] = TEXTOS_OPCIONES.index(self.var_m_opciones.get()) + 2
 
+        # Partes con otro número de opciones (opcional)
+        try:
+            partes = texto_a_partes(self.var_m_partes.get())
+            self.lbl_partes.configure(text="")
+            if partes:
+                m["partes"] = partes
+            else:
+                m.pop("partes", None)
+        except ValueError as error:
+            self.lbl_partes.configure(text=str(error))
+
         if codigo_manual:
             m["codigo"] = self.var_m_codigo.get().strip().upper()
             m["_codigo_auto"] = False
@@ -462,7 +515,7 @@ class PestanaGenerador(ttk.Frame):
 
         # Actualizar solo la fila de la tabla (sin perder la selección)
         fila = self.tabla.get_children()[i]
-        self.tabla.item(fila, values=(m["nombre"], m["preguntas"], m["opciones"]))
+        self.tabla.item(fila, values=(m["nombre"], m["preguntas"], _texto_opciones(m)))
         self._programar_vista_previa()
 
     def _elegir_logo(self) -> None:
@@ -489,7 +542,9 @@ class PestanaGenerador(ttk.Frame):
                 "grado": self.var_grado.get().strip(),
                 "fecha": self.var_fecha.get().strip(),
             },
-            "documento": {"digitos": int(digitos) if digitos.isdigit() else digitos},
+            "documento": ({"tipo": "lista"} if self._por_lista() else
+                          {"tipo": "documento",
+                           "digitos": int(digitos) if digitos.isdigit() else digitos}),
             "opciones": {"numeracion": self.var_numeracion.get(),
                          "formas": TEXTOS_FORMAS.index(self.var_formas.get()) + 1},
             # Las claves que empiezan por "_" son internas: no van al archivo
@@ -508,6 +563,8 @@ class PestanaGenerador(ttk.Frame):
         self.var_grado.set(str(examen.get("grado", "")))
         self.var_fecha.set(examen.get("fecha", ""))
         self.var_digitos.set(str(datos.get("documento", {}).get("digitos", 10)))
+        self.var_identificacion.set(TEXTOS_IDENTIFICACION[
+            1 if datos.get("documento", {}).get("tipo") == "lista" else 0])
         self.var_numeracion.set(datos.get("opciones", {}).get("numeracion", "continua"))
         formas = int(datos.get("opciones", {}).get("formas", 1) or 1)
         self.var_formas.set(TEXTOS_FORMAS[max(1, min(formas, len(TEXTOS_FORMAS))) - 1])
@@ -516,6 +573,7 @@ class PestanaGenerador(ttk.Frame):
             self.materias.append({
                 "nombre": m.get("nombre", ""), "preguntas": m.get("preguntas", 10),
                 "opciones": m.get("opciones", 4), "codigo": m.get("codigo", ""),
+                **({"partes": m["partes"]} if m.get("partes") else {}),
                 "_codigo_auto": False})   # códigos de un archivo: se respetan
         self._refrescar_tabla(seleccionar=0)
 
@@ -557,6 +615,11 @@ class PestanaGenerador(ttk.Frame):
                 return "Hay una materia sin nombre."
             if not isinstance(m["preguntas"], int) or not 1 <= m["preguntas"] <= 100:
                 return f"«{m['nombre']}»: el número de preguntas debe estar entre 1 y 100."
+        if self._por_lista():
+            if len(self.lista_estudiantes) > 99:
+                return ("La hoja con N.º de lista admite hasta 99 estudiantes y la lista tiene "
+                        f"{len(self.lista_estudiantes)}. Divídala por cursos.")
+            return None
         if not isinstance(datos["documento"]["digitos"], int):
             return "Los dígitos del documento deben ser un número entre 4 y 12."
         largos = [e for e in self.lista_estudiantes

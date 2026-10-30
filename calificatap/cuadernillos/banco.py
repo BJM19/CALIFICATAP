@@ -64,6 +64,15 @@ class Pregunta:
     imagen: bytes | None = None
     fija: bool = False                   # True = no cambiar el orden de sus opciones
     fila: int = 0                        # fila del Excel (para los mensajes de error)
+    # Imagen de cada opción (None = solo texto). Misma longitud que 'opciones'.
+    opciones_imagen: list = field(default_factory=list)
+
+    def imagen_de_opcion(self, i: int) -> bytes | None:
+        return self.opciones_imagen[i] if i < len(self.opciones_imagen) else None
+
+    def opcion_vacia(self, i: int) -> bool:
+        return not (self.opciones[i] if i < len(self.opciones) else "") \
+            and not self.imagen_de_opcion(i)
 
 
 @dataclass
@@ -85,7 +94,7 @@ def crear_plantilla(examen: Examen, ruta: str | Path) -> Path:
     ruta = Path(ruta)
     ruta.parent.mkdir(parents=True, exist_ok=True)
     (ruta.parent / CARPETA_IMAGENES).mkdir(exist_ok=True)
-    max_opciones = max(m.opciones for m in examen.materias)
+    max_opciones = max(m.opciones_max for m in examen.materias)
     numeros = examen.numeros_impresos()
 
     libro = Workbook()
@@ -111,6 +120,12 @@ def crear_plantilla(examen: Examen, ruta: str | Path) -> Path:
         for celda in fila:
             celda.alignment = Alignment(wrap_text=True, vertical="top")
         fila[0].fill = fila[1].fill = PatternFill("solid", fgColor=VERDE_CLARO)
+    # Opciones que esa pregunta NO tiene en la hoja de respuestas: en gris
+    etiquetas = [e for m in examen.materias for e in m.etiquetas()]
+    opciones_de = {e: m.opciones_de(e) for m in examen.materias for e in m.etiquetas()}
+    for n, e in enumerate(etiquetas, start=2):
+        for k in range(opciones_de[e], max_opciones):
+            hoja.cell(row=n, column=6 + k).fill = PatternFill("solid", fgColor="D9D9D9")
     hoja.freeze_panes = "D2"
     # Lista desplegable en "Correcta" y "Fija"
     col_correcta = hoja.cell(row=1, column=len(titulos) - 1).column_letter
@@ -147,6 +162,9 @@ def crear_plantilla(examen: Examen, ruta: str | Path) -> Path:
         "(por ejemplo, si una dice «Todas las anteriores» o van de menor a mayor).",
         "• Imagen: pegue la imagen encima de esta celda, o escriba el nombre del archivo "
         "(por ejemplo grafica1.png) y guárdelo en la carpeta «imagenes» junto a este Excel.",
+        "• Opciones con imagen (por ejemplo «¿Cuál gráfica…?»): pegue la imagen encima de la "
+        "celda de esa opción (A, B, C...). Puede dejar el texto vacío.",
+        "• Las celdas grises son opciones que esa pregunta no tiene en la hoja de respuestas.",
         "• Contexto: si varias preguntas usan el mismo texto, tabla o gráfica, escriba su ID "
         "(por ejemplo T1) en cada una de ellas. Esas preguntas deben ir SEGUIDAS.",
         "",
@@ -176,15 +194,24 @@ def _texto(valor) -> str:
     return str(valor).strip()
 
 
-def _imagenes_pegadas(hoja) -> dict[int, bytes]:
-    """{fila: bytes} de las imágenes pegadas dentro del Excel (según la fila donde empiezan)."""
+def _imagenes_por_celda(hoja) -> dict[tuple[int, int], bytes]:
+    """{(fila, columna): bytes} de las imágenes pegadas (según la celda donde empiezan)."""
     imagenes = {}
     for imagen in getattr(hoja, "_images", []):
         try:
-            fila = imagen.anchor._from.row + 1          # openpyxl cuenta desde 0
+            desde = imagen.anchor._from
+            celda = (desde.row + 1, desde.col + 1)      # openpyxl cuenta desde 0
             datos = imagen._data()
         except Exception:
             continue
+        imagenes.setdefault(celda, datos)
+    return imagenes
+
+
+def _imagenes_pegadas(hoja) -> dict[int, bytes]:
+    """{fila: bytes} de las imágenes pegadas dentro del Excel (la primera de cada fila)."""
+    imagenes = {}
+    for (fila, _), datos in sorted(_imagenes_por_celda(hoja).items()):
         imagenes.setdefault(fila, datos)
     return imagenes
 
@@ -243,7 +270,12 @@ def leer_banco(examen: Examen, ruta: str | Path) -> Banco:
     faltan = [t for t in ("Materia", "Enunciado", "Correcta") if t not in col]
     if faltan:
         return Banco({}, contextos, [f"A la hoja «Preguntas» le faltan las columnas: {', '.join(faltan)}."])
-    pegadas = _imagenes_pegadas(hoja)
+    por_celda = _imagenes_por_celda(hoja)
+    columnas_opcion = {i + 1: t for i, t in enumerate(titulos) if len(t) == 1 and t in LETRAS}
+    pegadas = {}                       # imagen del ENUNCIADO: la que no está sobre una opción
+    for (fila, columna), datos in sorted(por_celda.items()):
+        if columna not in columnas_opcion:
+            pegadas.setdefault(fila, datos)
     letras_col = [t for t in titulos if len(t) == 1 and t in LETRAS]
     materias = {m.codigo: m for m in examen.materias}
     vistas: dict[str, int] = {}
@@ -266,12 +298,15 @@ def leer_banco(examen: Examen, ruta: str | Path) -> Banco:
             continue
         etiqueta = m.etiquetas()[vistas[codigo] - 1]
         opciones = [valor(l) for l in letras_col]
-        while opciones and not opciones[-1]:
+        # imagen pegada sobre la celda de una opción → imagen de esa opción
+        imagenes_op = [por_celda.get((n, col[l] + 1)) for l in letras_col]
+        while opciones and not opciones[-1] and not imagenes_op[len(opciones) - 1]:
             opciones.pop()                       # las opciones vacías del final no cuentan
         p = Pregunta(etiqueta, codigo, valor("Enunciado"), opciones, valor("Correcta").upper(),
                      valor("Contexto").upper(),
                      _leer_imagen(valor("Imagen"), pegadas.get(n), carpeta, donde, problemas),
-                     valor("Fija").lower() in ("sí", "si", "x", "1", "true"), n)
+                     valor("Fija").lower() in ("sí", "si", "x", "1", "true"), n,
+                     imagenes_op[:len(opciones)] if any(imagenes_op[:len(opciones)]) else [])
         problemas += [f"{donde}: {x}" for x in problemas_de_pregunta(p, m, contextos)]
         preguntas[etiqueta] = p
 
@@ -298,16 +333,17 @@ def problemas_de_pregunta(p: Pregunta, m, contextos: dict) -> list[str]:
     problemas = []
     if not p.enunciado and not p.imagen and not p.contexto:
         problemas.append("falta el enunciado.")
-    opciones = list(p.opciones)
-    while opciones and not opciones[-1]:
-        opciones.pop()
-    if "" in opciones:
+    n = len(p.opciones)
+    while n and p.opcion_vacia(n - 1):
+        n -= 1
+    opciones = p.opciones[:n]
+    if any(p.opcion_vacia(i) for i in range(n)):
         problemas.append("hay una opción vacía en medio de las demás.")
     if len(opciones) < 2:
         problemas.append("necesita al menos 2 opciones.")
-    elif len(opciones) > m.opciones:
-        problemas.append(f"tiene {len(opciones)} opciones, pero la hoja de respuestas de "
-                         f"{m.nombre} solo tiene {m.opciones}.")
+    elif len(opciones) > m.opciones_de(p.etiqueta):
+        problemas.append(f"tiene {len(opciones)} opciones, pero en la hoja de respuestas esta "
+                         f"pregunta solo tiene {m.opciones_de(p.etiqueta)}.")
     if not p.correcta:
         problemas.append("falta la respuesta correcta.")
     elif p.correcta not in LETRAS[:max(2, len(opciones))]:
@@ -335,7 +371,8 @@ def problemas_de_contextos(examen: Examen, preguntas: dict[str, Pregunta]) -> li
 
 
 def esta_vacia(p: Pregunta) -> bool:
-    return not (p.enunciado or p.imagen or p.contexto or any(p.opciones) or p.correcta)
+    return not (p.enunciado or p.imagen or p.contexto or any(p.opciones) or p.correcta
+                or any(p.opciones_imagen))
 
 
 def banco_vacio(examen: Examen) -> Banco:
@@ -380,9 +417,12 @@ def guardar_banco(examen: Examen, banco: Banco, ruta: str | Path) -> Path:
             continue
         hoja.cell(fila, col["Contexto"]).value = p.contexto or None
         hoja.cell(fila, col["Enunciado"]).value = p.enunciado or None
-        for letra, texto in zip(LETRAS, p.opciones):
+        for i, (letra, texto) in enumerate(zip(LETRAS, p.opciones)):
             if letra in col:
                 hoja.cell(fila, col[letra]).value = texto or None
+                if p.imagen_de_opcion(i):
+                    pegar(hoja, p.imagen_de_opcion(i),
+                          f"{hoja.cell(fila, col[letra]).column_letter}{fila}", fila)
         hoja.cell(fila, col["Correcta"]).value = p.correcta or None
         hoja.cell(fila, col["Fija"]).value = "sí" if p.fija else None
         if p.imagen:

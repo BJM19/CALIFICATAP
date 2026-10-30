@@ -259,7 +259,7 @@ def leer_hojas(examen: Examen, archivos: list[Path], raiz_proyecto: Path,
                              respuestas={e: fila.get(e, "") or "" for e in etiquetas},
                              imagen=f"lecturas/imagenes/{nombre_final}",
                              forma=fila.get("forma", "") or "", hoja=k,
-                             letras_forma=examen.letras_formas,
+                             letras_forma=examen.letras_formas, por_lista=examen.por_lista,
                              etiquetas_hoja=examen.etiquetas_de_hoja(k))
             hoja.actualizar_estado()
             # ¿La hoja es de este examen? (código impreso en la franja inferior)
@@ -272,7 +272,7 @@ def leer_hojas(examen: Examen, archivos: list[Path], raiz_proyecto: Path,
                              respuestas={e: "" for e in etiquetas},
                              imagen=f"lecturas/imagenes/{nombre_final}", hoja=k,
                              motivo=motivo_de.get(imagen, ""),
-                             letras_forma=examen.letras_formas,
+                             letras_forma=examen.letras_formas, por_lista=examen.por_lista,
                              etiquetas_hoja=examen.etiquetas_de_hoja(k))
         hojas.append(hoja)
 

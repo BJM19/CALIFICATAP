@@ -74,7 +74,7 @@ def _miniatura(datos: bytes | None, alto: int = 80) -> ImageTk.PhotoImage | None
 
 
 class EditorPreguntas(tk.Toplevel):
-    def __init__(self, padre, examen, al_cerrar=None):
+    def __init__(self, padre, examen, al_cerrar=None, carpeta_biblioteca: Path | None = None):
         super().__init__(padre)
         self.title(f"Preguntas del cuadernillo — {examen.nombre_visible}")
         self.geometry("1320x820")
@@ -82,6 +82,7 @@ class EditorPreguntas(tk.Toplevel):
         self.configure(bg=estilos.FONDO)
         self.transient(padre.winfo_toplevel())
         self.examen, self.al_cerrar = examen, al_cerrar
+        self.carpeta_biblioteca = carpeta_biblioteca
         self.ruta = ruta_banco(examen)
         self.materias = {m.codigo: m for m in examen.materias}
         self.numeros = examen.numeros_impresos()
@@ -204,6 +205,13 @@ class EditorPreguntas(tk.Toplevel):
         self.lbl_titulo = ttk.Label(fila, style="Titulo.TLabel")
         self.lbl_titulo.pack(side="left")
         ttk.Button(fila, text="▶", width=3, command=lambda: self.mover(1)).pack(side="right")
+        if self.carpeta_biblioteca:
+            barra_bib = ttk.Frame(centro)
+            barra_bib.pack(fill="x", pady=(4, 0))
+            ttk.Button(barra_bib, text="📚 Traer de la biblioteca…", style="Pequeno.TButton",
+                       command=self.traer_de_biblioteca).pack(side="left")
+            ttk.Button(barra_bib, text="📚 Guardar en la biblioteca…", style="Pequeno.TButton",
+                       command=self.guardar_en_biblioteca).pack(side="left", padx=6)
         ttk.Button(fila, text="◀", width=3, command=lambda: self.mover(-1)).pack(side="right")
 
         fila = ttk.Frame(centro)
@@ -247,15 +255,16 @@ class EditorPreguntas(tk.Toplevel):
                                    font=(estilos.FAMILIA, 9))
         self.lbl_imagen.pack(fill="x", pady=(4, 0))
 
-        ttk.Label(centro, text="Opciones (marque la correcta)",
+        ttk.Label(centro, text="Opciones (marque la correcta · 🖼 = imagen en la opción)",
                   font=(estilos.FAMILIA, 10, "bold")).pack(anchor="w", pady=(10, 2))
         self.marco_opciones = ttk.Frame(centro)
         self.marco_opciones.pack(fill="x")
         self.var_correcta = tk.StringVar()
         self.var_correcta.trace_add("write", self._cambio)
         self.vars_opciones: list[tk.StringVar] = []
+        self.miniaturas_opciones: list[tk.Label] = []
         self.entradas_opciones: list[ttk.Entry] = []
-        for i, letra in enumerate(LETRAS[:max(m.opciones for m in self.materias.values())]):
+        for i, letra in enumerate(LETRAS[:max(m.opciones_max for m in self.materias.values())]):
             fila = ttk.Frame(self.marco_opciones)
             ttk.Radiobutton(fila, text=f"{letra}.", value=letra,
                             variable=self.var_correcta).pack(side="left")
@@ -264,9 +273,17 @@ class EditorPreguntas(tk.Toplevel):
             entrada = ttk.Entry(fila, textvariable=var, font=(estilos.FAMILIA, 11))
             entrada.pack(side="left", fill="x", expand=True, padx=(4, 0))
             entrada.bind("<FocusIn>", lambda e, w=entrada: setattr(self, "_ultimo_campo", w))
+            # Imagen de la opción (ej. «¿Cuál gráfica...?»): miniatura + botones
+            miniatura = tk.Label(fila, bg=estilos.FONDO)
+            miniatura.pack(side="left", padx=(4, 0))
+            tk.Button(fila, text="🖼", relief="flat", bg=estilos.FONDO_PANEL, cursor="hand2",
+                      command=lambda i=i: self.imagen_opcion(i)).pack(side="left", padx=(4, 0))
+            tk.Button(fila, text="✕", relief="flat", bg=estilos.FONDO_PANEL, cursor="hand2",
+                      fg=estilos.TEXTO_SUAVE,
+                      command=lambda i=i: self._poner_imagen_opcion(i, None)).pack(side="left")
             self.vars_opciones.append(var)
             self.entradas_opciones.append(entrada)
-            fila._letra = letra
+            self.miniaturas_opciones.append(miniatura)
         self.var_fija = tk.BooleanVar()
         ttk.Checkbutton(centro, variable=self.var_fija, command=self._cambio,
                         text="Fija: no cambiar el orden de estas opciones en las otras formas"
@@ -327,6 +344,82 @@ class EditorPreguntas(tk.Toplevel):
         if 0 <= i < len(self.orden):
             self.ir_a(self.orden[i])
 
+    # ======================================================================
+    # Biblioteca del colegio
+    # ======================================================================
+    def _biblioteca(self):
+        from ..cuadernillos.biblioteca import Biblioteca
+        return Biblioteca(self.carpeta_biblioteca)
+
+    def guardar_en_biblioteca(self) -> None:
+        from .ventana_biblioteca import VentanaGuardarBiblioteca
+        self._formulario_a_pregunta()
+        VentanaGuardarBiblioteca(self, self._biblioteca(), self.examen, self.banco, self.actual)
+
+    def traer_de_biblioteca(self) -> None:
+        from .ventana_biblioteca import VentanaBiblioteca
+        self._formulario_a_pregunta()
+        biblioteca = self._biblioteca()
+        m = self.materias[self.actual.split("_")[0]]
+        VentanaBiblioteca(
+            self, biblioteca, m.nombre,
+            al_elegir=lambda entradas: self._poner_de_biblioteca(biblioteca, entradas),
+            destino=f"Las preguntas que elija quedarán desde la pregunta "
+                    f"{self.numeros[self.actual]} de {m.nombre}, una tras otra.")
+
+    def _poner_de_biblioteca(self, biblioteca, entradas) -> bool:
+        """Pone las preguntas elegidas desde la pregunta actual, seguidas. True si se pudo."""
+        m = self.materias[self.actual.split("_")[0]]
+        lista = m.etiquetas()
+        inicio = lista.index(self.actual)
+        destinos = lista[inicio:inicio + len(entradas)]
+        if len(destinos) < len(entradas):
+            messagebox.showwarning(
+                "Biblioteca", f"No caben: desde la pregunta {self.numeros[self.actual]} solo "
+                f"quedan {len(destinos)} lugares en {m.nombre} y eligió {len(entradas)} "
+                "(las de un mismo texto cuentan todas).", parent=self)
+            return False
+        ocupadas = [e for e in destinos if not esta_vacia(self.banco.preguntas[e])]
+        if ocupadas and not messagebox.askyesno(
+                "Biblioteca", f"{len(ocupadas)} de esas preguntas ya tienen texto y se "
+                "reemplazarán. ¿Continuar?", parent=self):
+            return False
+        # Textos compartidos: el mismo texto de la biblioteca queda con un solo ID en el examen
+        ids_examen: dict[str, str] = {}
+        for entrada, etiqueta in zip(entradas, destinos):
+            p, contexto = biblioteca.a_pregunta(entrada, etiqueta)
+            if contexto:
+                if contexto.id not in ids_examen:
+                    ya = next((i for i, c in self.banco.contextos.items()
+                               if c.texto == contexto.texto and c.imagen == contexto.imagen), None)
+                    if ya is None:
+                        k = 1
+                        while f"T{k}" in self.banco.contextos:
+                            k += 1
+                        ya = f"T{k}"
+                        self.banco.contextos[ya] = Contexto(ya, contexto.texto, contexto.imagen)
+                    ids_examen[contexto.id] = ya
+                p.contexto = ids_examen[contexto.id]
+            self.banco.preguntas[etiqueta] = p
+        biblioteca.marcar_uso([e.id for e in entradas], self.examen.nombre_visible)
+        try:
+            biblioteca.guardar()
+        except OSError:
+            pass
+        self._sucio = True
+        for e in destinos:
+            self._refrescar_item(e)
+        self.ir_a(self.actual)
+        self._cambio()
+        demasiadas = [self.numeros[e] for e in destinos
+                      if len(self.banco.preguntas[e].opciones) > m.opciones_de(e)]
+        if demasiadas:
+            messagebox.showwarning(
+                "Biblioteca", "Ojo: las preguntas " + ", ".join(map(str, demasiadas)) +
+                " tienen más opciones de las que hay en la hoja de respuestas. Quítele "
+                "alguna opción o cambie la materia en «1. Crear hoja».", parent=self)
+        return True
+
     def siguiente_pendiente(self) -> None:
         i = self.orden.index(self.actual)
         for e in self.orden[i + 1:] + self.orden[:i]:
@@ -350,12 +443,14 @@ class EditorPreguntas(tk.Toplevel):
         self.txt_enunciado.insert("1.0", p.enunciado)
         self.txt_enunciado.edit_modified(False)
         # tantas opciones como tiene la hoja de respuestas en esta materia
+        n_opciones = m.opciones_de(etiqueta)        # puede cambiar dentro de la materia
         for i, fila in enumerate(self.marco_opciones.winfo_children()):
-            if i < m.opciones:
+            if i < n_opciones:
                 fila.pack(fill="x", pady=2)
             else:
                 fila.pack_forget()
             self.vars_opciones[i].set(p.opciones[i] if i < len(p.opciones) else "")
+            self._mostrar_imagen_opcion(i)
         self.var_correcta.set(p.correcta)
         self.var_fija.set(p.fija)
         self._mostrar_imagen()
@@ -370,10 +465,13 @@ class EditorPreguntas(tk.Toplevel):
         p = self.banco.preguntas[self.actual]
         m = self.materias[p.materia]
         p.enunciado = self.txt_enunciado.get("1.0", "end").strip()
-        opciones = [v.get().strip() for v in self.vars_opciones[:m.opciones]]
-        while opciones and not opciones[-1]:
+        n = m.opciones_de(self.actual)
+        opciones = [v.get().strip() for v in self.vars_opciones[:n]]
+        imagenes = [p.imagen_de_opcion(i) for i in range(n)]
+        while opciones and not opciones[-1] and not imagenes[len(opciones) - 1]:
             opciones.pop()
         p.opciones = opciones
+        p.opciones_imagen = imagenes[:len(opciones)] if any(imagenes[:len(opciones)]) else []
         p.correcta = self.var_correcta.get()
         p.fija = self.var_fija.get()
         texto = self.var_contexto.get()
@@ -432,11 +530,16 @@ class EditorPreguntas(tk.Toplevel):
                                 "Windows + Shift + S, y vuelva a intentar.", parent=self)
 
     def _pegar_atajo(self, _=None):
+        """Ctrl+V con una imagen copiada: va a la opción donde está el cursor, o a la pregunta."""
         datos = leer_imagen_portapapeles()
-        if datos:
+        if not datos:
+            return None                  # no era una imagen: pegado normal de texto
+        foco = self.focus_get()
+        if foco in self.entradas_opciones:
+            self._poner_imagen_opcion(self.entradas_opciones.index(foco), datos)
+        else:
             self._poner_imagen(datos)
-            return "break"
-        return None                      # no era una imagen: pegado normal de texto
+        return "break"
 
     def imagen_archivo(self) -> None:
         ruta = filedialog.askopenfilename(parent=self, title="Elegir imagen",
@@ -447,6 +550,53 @@ class EditorPreguntas(tk.Toplevel):
     def quitar_imagen(self) -> None:
         if self.banco.preguntas[self.actual].imagen:
             self._poner_imagen(None)
+
+    def _mostrar_imagen_opcion(self, i: int) -> None:
+        p = self.banco.preguntas[self.actual]
+        foto = _miniatura(p.imagen_de_opcion(i), 26)
+        self._fotos[f"op{i}"] = foto
+        self.miniaturas_opciones[i].configure(image=foto or "")
+
+    def _poner_imagen_opcion(self, i: int, datos: bytes | None) -> None:
+        p = self.banco.preguntas[self.actual]
+        if datos is None and not p.imagen_de_opcion(i):
+            return
+        n = max(i + 1, len(p.opciones))
+        p.opciones = (p.opciones + [""] * n)[:n]
+        imagenes = [p.imagen_de_opcion(k) for k in range(n)]
+        imagenes[i] = datos
+        p.opciones_imagen = imagenes
+        self._mostrar_imagen_opcion(i)
+        self._cambio()
+
+    def imagen_opcion(self, i: int) -> None:
+        """🖼 de una opción: un menú para elegir de dónde sale la imagen."""
+        menu = tk.Menu(self, tearoff=False)
+        hay_copiada = leer_imagen_portapapeles() is not None
+        menu.add_command(label="📁 Elegir un archivo de imagen…",
+                         command=lambda: self._opcion_desde_archivo(i))
+        menu.add_command(label="📋 Pegar la imagen copiada" if hay_copiada
+                         else "📋 Pegar la imagen copiada (no hay ninguna copiada)",
+                         state="normal" if hay_copiada else "disabled",
+                         command=lambda: self._poner_imagen_opcion(i, leer_imagen_portapapeles()))
+        menu.add_command(label="∑ Escribir una fórmula…",
+                         command=lambda: VentanaFormula(
+                             self, al_aceptar=lambda datos: self._poner_imagen_opcion(i, datos)))
+        if self.banco.preguntas[self.actual].imagen_de_opcion(i):
+            menu.add_separator()
+            menu.add_command(label="Quitar la imagen", command=lambda: self._poner_imagen_opcion(i, None))
+        boton = self.miniaturas_opciones[i]
+        try:
+            menu.tk_popup(boton.winfo_rootx(), boton.winfo_rooty() + boton.winfo_height())
+        finally:
+            menu.grab_release()
+
+    def _opcion_desde_archivo(self, i: int) -> None:
+        ruta = filedialog.askopenfilename(
+            parent=self, title=f"Imagen de la opción {LETRAS[i]}",
+            filetypes=[("Imágenes", "*.png *.jpg *.jpeg *.gif *.bmp")])
+        if ruta:
+            self._poner_imagen_opcion(i, Path(ruta).read_bytes())
 
     def formula(self) -> None:
         VentanaFormula(self, al_aceptar=self._formula_lista)

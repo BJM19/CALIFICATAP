@@ -28,6 +28,19 @@ class MateriaExamen:
     nombre: str
     preguntas: int
     opciones: int
+    partes: tuple = ()        # ((desde, hasta, opciones), ...) si cambia según la pregunta
+
+    def opciones_de(self, etiqueta: str) -> int:
+        """Cuántas opciones tiene una pregunta ('ING_03' → 8 si la parte 1 es A-H)."""
+        numero = int(etiqueta.rsplit("_", 1)[1])
+        for desde, hasta, opciones in self.partes:
+            if desde <= numero <= hasta:
+                return opciones
+        return self.opciones
+
+    @property
+    def opciones_max(self) -> int:
+        return max([self.opciones] + [o for _, _, o in self.partes])
 
     def etiquetas(self) -> list[str]:
         """['MAT_01', 'MAT_02', ...] — los nombres de columna de cada pregunta."""
@@ -55,7 +68,9 @@ class Examen:
 
     @property
     def materias(self) -> list[MateriaExamen]:
-        return [MateriaExamen(m["codigo"].upper(), m["nombre"], m["preguntas"], m["opciones"])
+        return [MateriaExamen(m["codigo"].upper(), m["nombre"], m["preguntas"], m["opciones"],
+                              tuple((p["desde"], p["hasta"], p["opciones"])
+                                    for p in m.get("partes") or []))
                 for m in self.datos["materias"]]
 
     def todas_las_etiquetas(self) -> list[str]:
@@ -87,6 +102,11 @@ class Examen:
     def formas_para_clave(self) -> str:
         """Formas que necesitan clave: 'AB'..., o 'A' si no hay formas."""
         return self.letras_formas or "A"
+
+    @property
+    def por_lista(self) -> bool:
+        """True si la hoja pide el N.º de lista en vez del número de documento."""
+        return (self.datos.get("documento") or {}).get("tipo") == "lista"
 
     @property
     def codigo(self) -> int | None:

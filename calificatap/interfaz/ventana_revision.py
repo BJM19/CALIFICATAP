@@ -98,7 +98,7 @@ def puntos_por_revisar(hojas: list, nombres: dict[str, str]) -> list[Punto]:
         documento = normalizar_documento(h.documento)
         if h.estado == REVISAR and h.letras_forma and h.forma not in h.letras_forma:
             puntos.append(Punto(h, "forma"))
-        if len(documento) < 5 or (nombres and documento not in nombres):
+        if h.documento_incompleto() or (nombres and documento not in nombres):
             puntos.append(Punto(h, "documento"))
         if h.estado == REVISAR:
             puntos += [Punto(h, "pregunta", e) for e in h.doble_marca()]
@@ -202,7 +202,7 @@ class VentanaRevision(tk.Toplevel):
             etiquetas = {"forma"}
         else:
             etiquetas = {e for b in template["fieldBlocks"].values()
-                         for e in b["fieldLabels"] if e.startswith("doc")}
+                         for e in b["fieldLabels"] if e.startswith(("doc", "lis"))}
         caja = caja_de_campos(template, etiquetas)
         if caja is None:
             return None
@@ -244,7 +244,8 @@ class VentanaRevision(tk.Toplevel):
         self.lbl_progreso.configure(text=f"Revisión {self.indice + 1} de {total}")
         self.barra.configure(value=len(self.resueltos))
         nombre = self.nombres.get(normalizar_documento(h.documento), "")
-        self.lbl_hoja.configure(text=" · ".join(x for x in (nombre, h.documento, h.origen) if x))
+        ident = (f"N.º {h.documento}" if h.por_lista and h.documento else h.documento)
+        self.lbl_hoja.configure(text=" · ".join(x for x in (nombre, ident, h.origen) if x))
 
         recorte = self._recorte(punto)
         if recorte is not None:
@@ -277,7 +278,7 @@ class VentanaRevision(tk.Toplevel):
             detalle = f"ya quedó: {leida or 'en blanco'}"
         self.lbl_pregunta.configure(
             text=f"Pregunta {self.numeros[e]} · {materia.nombre} — {detalle}. ¿Qué marcó?")
-        for letra in "ABCDEFGH"[:materia.opciones]:
+        for letra in "ABCDEFGH"[:materia.opciones_de(e)]:
             self._boton_opcion(letra, lambda l=letra: self._responder(l))
         self._boton_opcion("En blanco", lambda: self._responder(""))
         ttk.Label(self.zona_respuesta, style="Subtitulo.TLabel", wraplength=250, justify="left",
@@ -294,8 +295,9 @@ class VentanaRevision(tk.Toplevel):
     def _mostrar_documento(self, punto: Punto) -> None:
         h = punto.hoja
         documento = normalizar_documento(h.documento)
-        motivo = ("está incompleto" if len(documento) < 5 else "no está en la lista del curso")
-        self.lbl_pregunta.configure(text=f"Documento «{h.documento or '—'}»: {motivo}. "
+        que = "N.º de lista" if h.por_lista else "Documento"
+        motivo = ("está incompleto" if h.documento_incompleto() else "no está en la lista del curso")
+        self.lbl_pregunta.configure(text=f"{que} «{h.documento or '—'}»: {motivo}. "
                                          "Escríbalo bien y pulse Enter.")
         var = tk.StringVar(value=h.documento)
         entrada = ttk.Entry(self.zona_respuesta, textvariable=var, width=18,
@@ -364,7 +366,7 @@ class VentanaRevision(tk.Toplevel):
         punto = self.puntos[self.indice]
         letra = (evento.char or "").upper()
         if punto.tipo == "pregunta":
-            opciones = "ABCDEFGH"[:self.materia_de[punto.etiqueta].opciones]
+            opciones = "ABCDEFGH"[:self.materia_de[punto.etiqueta].opciones_de(punto.etiqueta)]
             if letra and letra in opciones:
                 self._responder(letra)
             elif evento.keysym in ("space", "0", "Delete", "BackSpace"):

@@ -49,7 +49,7 @@ def respuestas_al_azar(maqueta, semilla: int, prob_blanco: float = 0.05) -> dict
         if bloque.nombre.startswith("Codigo"):
             continue          # el código del examen ya viene impreso
         for etiqueta in bloque.etiquetas:
-            if bloque.nombre == "Documento" or azar.random() > prob_blanco:
+            if bloque.nombre in ("Documento", "Lista") or azar.random() > prob_blanco:
                 marcas[etiqueta] = azar.choice(bloque.valores)
     return marcas
 

@@ -67,9 +67,13 @@ def estructura(datos: dict) -> tuple:
     El nombre del colegio, la fecha o el logo no cuentan.
     """
     opciones = datos.get("opciones", {})
-    return (datos.get("documento", {}).get("digitos", 10),
+    documento = datos.get("documento", {})
+    return ((documento.get("tipo", "documento"),
+             2 if documento.get("tipo") == "lista" else documento.get("digitos", 10)),
             int(opciones.get("formas", 1) or 1),
-            tuple((m.get("codigo", "").upper(), m.get("preguntas"), m.get("opciones"))
+            tuple((m.get("codigo", "").upper(), m.get("preguntas"), m.get("opciones"),
+                   tuple((p.get("desde"), p.get("hasta"), p.get("opciones"))
+                         for p in m.get("partes") or []))
                   for m in datos.get("materias", [])))
 
 
@@ -121,17 +125,31 @@ def _solo_digitos(texto: str) -> str:
     return re.sub(r"\D", "", str(texto)).lstrip("0")
 
 
-def preparar_estudiantes(estudiantes: list[dict], digitos: int) -> list[dict]:
-    """Limpia la lista y revisa que cada documento quepa en la hoja."""
+def preparar_estudiantes(estudiantes: list[dict], digitos: int,
+                         por_lista: bool = False) -> list[dict]:
+    """
+    Limpia la lista y revisa que cada documento quepa en la hoja.
+
+    Con por_lista, lo que va en la hoja es el N.º de lista (1 a 99), así que el
+    documento puede faltar o ser largo; lo que no puede pasar es que haya más de
+    99 estudiantes.
+    """
     limpios, largos = [], []
-    for e in estudiantes:
-        doc = _solo_digitos(e.get("documento", ""))
-        if not doc:
-            continue
-        if len(doc) > digitos:
+    for i, e in enumerate(estudiantes):
+        numero = _solo_digitos(e.get("lista", "")) or str(i + 1)
+        doc = str(e.get("documento", "")).strip()
+        doc = doc if doc.startswith("L") else _solo_digitos(doc)   # "L07": sin documento
+        if por_lista:
+            doc = doc or f"L{int(numero):02d}"
+        if not doc or (not por_lista and doc.startswith("L")):
+            continue                         # sin documento no se puede usar en esa hoja
+        if not por_lista and len(doc) > digitos:
             largos.append(f"{e.get('nombre', '')} ({doc})")
         limpios.append({"documento": doc, "nombre": str(e.get("nombre", "")).strip(),
-                        "curso": str(e.get("curso", "") or "").strip()})
+                        "curso": str(e.get("curso", "") or "").strip(), "lista": numero})
+    if por_lista and any(int(e["lista"]) > 99 for e in limpios):
+        raise ErrorDeConfiguracion(
+            "La hoja con N.º de lista admite hasta 99 estudiantes. Divida la lista por cursos.")
     if largos:
         raise ErrorDeConfiguracion(
             f"{len(largos)} documento(s) tienen más de {digitos} cifras, por ejemplo "
@@ -157,7 +175,8 @@ def generar_desde_datos(datos: dict, carpeta_base: str | Path = ".",
     conf = configuracion_desde_datos(datos, carpeta_base)
 
     carpeta = Path(carpeta_salidas) / nombre_de_carpeta(f"{conf.nombre_examen}_grado_{conf.grado}")
-    lista = preparar_estudiantes(estudiantes, conf.digitos_documento) if estudiantes else []
+    lista = (preparar_estudiantes(estudiantes, conf.digitos_documento, conf.por_lista)
+             if estudiantes else [])
     anterior = _examen_anterior(carpeta)
     mismo_diseno = anterior is not None and estructura(anterior) == estructura(datos)
     conf.codigo_examen = _asignar_codigo(carpeta, Path(carpeta_salidas), mismo_diseno)
@@ -190,14 +209,16 @@ def generar_desde_datos(datos: dict, carpeta_base: str | Path = ".",
         pares = []
         for i, e in enumerate(lista):
             forma = letras[i % len(letras)] if letras and repartir_formas else ""
+            # En la versión con N.º de lista se imprime el número, no el documento
+            en_la_hoja = e["lista"] if conf.por_lista else e["documento"]
             for h in hojas:
-                pares.append((h, pagina_personalizada(h, e["documento"], e["nombre"],
+                pares.append((h, pagina_personalizada(h, en_la_hoja, e["nombre"],
                                                       e["curso"], forma)))
         ruta_personalizadas = carpeta / "hojas_con_nombre.pdf"
         dibujar_pdf_hojas(pares, ruta_personalizadas, titulo=conf.nombre_examen)
         # La misma lista sirve después en "Resultados" (nombres y quién no entregó)
         with open(carpeta / "estudiantes.csv", "w", newline="", encoding="utf-8-sig") as f:
-            escritor = csv.DictWriter(f, fieldnames=["documento", "nombre", "curso"])
+            escritor = csv.DictWriter(f, fieldnames=["documento", "nombre", "curso", "lista"])
             escritor.writeheader()
             escritor.writerows(lista)
 

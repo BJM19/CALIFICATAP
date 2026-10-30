@@ -29,7 +29,7 @@ from tkinter import filedialog, messagebox, ttk
 from ..lector.hojas import (ERROR, LISTA, REVISAR, cargar_hojas, combinar, guardar_hojas,
                            normalizar_documento)
 from ..lector.omr import EXTENSIONES_ADMITIDAS, ErrorDeLectura, leer_hojas
-from ..reportes.estudiantes import cargar_estudiantes
+from ..reportes.estudiantes import cargar_estudiantes, nombres_por_lectura
 
 from . import estilos
 from .utilidades import MarcoDesplazable, SelectorExamen, VisorImagen
@@ -204,10 +204,12 @@ class PestanaLector(ttk.Frame):
         if examen and examen.numero_hojas > 1:
             columnas.insert(2, "hoja")     # solo si el examen tiene varias hojas
         self.tabla.configure(displaycolumns=columnas)
+        self.tabla.heading("documento", text="N.º lista" if examen and examen.por_lista
+                           else "Documento")
         self._ajustar_observaciones()
         if examen:
-            lista = cargar_estudiantes(examen)
-            self.nombres = dict(zip(lista["documento"], lista["nombre"]))
+            # {lo que se lee en la hoja → nombre}: documento, o N.º de lista
+            self.nombres = nombres_por_lectura(examen, cargar_estudiantes(examen))
         self._llenar_tabla()
         self.visor.mostrar(None, "Las hojas leídas aparecerán aquí"
                            if not self.hojas else "")
@@ -242,7 +244,8 @@ class PestanaLector(ttk.Frame):
             return
         # Si el examen ya tiene lista de estudiantes, se practica con esos nombres
         lista_real = cargar_estudiantes(examen)
-        lista_fija = list(zip(lista_real["documento"], lista_real["nombre"])) or None
+        lista_fija = list(zip(lista_real["documento"], lista_real["nombre"],
+                              lista_real["lista"])) or None
         quienes = (f"los {len(lista_fija)} estudiantes de la lista del examen" if lista_fija
                    else "24 estudiantes inventados")
         if not messagebox.askyesno(
@@ -460,11 +463,13 @@ class PestanaLector(ttk.Frame):
             lineas.append("No marcó la forma." if not h.forma
                           else f"La forma tiene doble marca ({h.forma}).")
         documento = normalizar_documento(h.documento)
-        if len(documento) < 5:
-            lineas.append(f"Documento incompleto: se leyó «{h.documento or 'nada'}». "
+        que = "N.º de lista" if h.por_lista else "Documento"
+        if h.documento_incompleto():
+            lineas.append(f"{que} incompleto: se leyó «{h.documento or 'nada'}». "
                           "Corríjalo con doble clic.")
         elif self.nombres and documento not in self.nombres:
-            lineas.append(f"El documento {h.documento} no está en la lista del curso.")
+            lineas.append(f"El {'N.º de lista' if h.por_lista else 'documento'} {h.documento} "
+                          "no está en la lista del curso.")
         dobles = h.doble_marca()
         if dobles:
             lineas.append(f"Doble marca en {len(dobles)} pregunta(s): {lista_de(dobles)}. "
@@ -586,7 +591,8 @@ class VentanaCorreccion(tk.Toplevel):
 
         fila = ttk.Frame(derecha)
         fila.pack(fill="x", pady=4)
-        ttk.Label(fila, text="Documento:", font=(estilos.FAMILIA, 11, "bold")).pack(side="left")
+        ttk.Label(fila, text="N.º de lista:" if examen.por_lista else "Documento:",
+                  font=(estilos.FAMILIA, 11, "bold")).pack(side="left")
         self.var_documento = tk.StringVar(value=hoja.documento)
         ttk.Entry(fila, textvariable=self.var_documento, width=18,
                   font=(estilos.FAMILIA, 11)).pack(side="left", padx=8)
@@ -608,9 +614,9 @@ class VentanaCorreccion(tk.Toplevel):
                 continue
             marco = ttk.LabelFrame(desplazable.interior, text=m.nombre, style="Seccion.TLabelframe")
             marco.pack(fill="x", pady=4, padx=(0, 6))
-            valores = [""] + list("ABCDEFGH"[: m.opciones])
             for k, etiqueta in enumerate(e for e in m.etiquetas()
                                          if propias is None or e in propias):
+                valores = [""] + list("ABCDEFGH"[: m.opciones_de(etiqueta)])
                 actual = hoja.respuestas.get(etiqueta, "")
                 color = ("#FFE08A" if len(actual) > 1 else
                          "#DADFDC" if actual == "" else estilos.FONDO_PANEL)

@@ -38,8 +38,14 @@ class HojaLeida:
     hoja: int = 1                    # qué hoja del examen es (si tiene varias)
     letras_forma: str = ""           # formas válidas del examen ("AB"); no se guarda
     etiquetas_hoja: list[str] = field(default_factory=list)   # preguntas de esta hoja; no se guarda
+    por_lista: bool = False          # la hoja trae N.º de lista (1-99) y no documento; no se guarda
 
     # --- Revisiones automáticas -----------------------------------------
+    def documento_incompleto(self) -> bool:
+        """Un documento tiene al menos 5 cifras; un N.º de lista, 1 o 2 (basta con una)."""
+        cifras = normalizar_documento(self.documento)
+        return not cifras if self.por_lista else len(cifras) < 5
+
     def _propias(self) -> dict[str, str]:
         """Las respuestas de ESTA hoja (en exámenes de varias hojas, cada una tiene las suyas)."""
         if not self.etiquetas_hoja:
@@ -60,8 +66,8 @@ class HojaLeida:
         motivos = []
         if self.letras_forma and self.forma not in self.letras_forma:
             motivos.append("No marcó la forma" if not self.forma else "Forma con doble marca")
-        if len(normalizar_documento(self.documento)) < 5:
-            motivos.append("Documento incompleto")
+        if self.documento_incompleto():
+            motivos.append("Falta el N.º de lista" if self.por_lista else "Documento incompleto")
         if self.doble_marca():
             motivos.append(f"{len(self.doble_marca())} con doble marca")
         if len(self.sin_responder()) > len(self._propias()) * 0.5:
@@ -106,7 +112,7 @@ def cargar_hojas(examen: Examen) -> list[HojaLeida]:
                 imagen=fila.get("imagen", ""), estado=fila.get("estado", LISTA),
                 corregida=fila.get("corregida", "") == "sí", forma=fila.get("forma", "") or "",
                 motivo=fila.get("motivo", "") or "", letras_forma=examen.letras_formas,
-                hoja=int(fila.get("hoja") or 1),
+                hoja=int(fila.get("hoja") or 1), por_lista=examen.por_lista,
                 etiquetas_hoja=examen.etiquetas_de_hoja(int(fila.get("hoja") or 1))))
     return hojas
 

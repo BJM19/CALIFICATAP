@@ -42,7 +42,10 @@ def imagen_vista_previa(datos: dict, carpeta_base: str | Path, alto_px: int,
     paginas = None
     if estudiante:
         forma = "A" if conf.formas > 1 else ""
-        paginas = [pagina_personalizada(maqueta, estudiante["documento"], estudiante["nombre"],
+        # Hoja con N.º de lista: se imprime el número del estudiante, no su documento
+        en_la_hoja = (str(estudiante.get("lista") or 1) if conf.por_lista
+                      else estudiante["documento"])
+        paginas = [pagina_personalizada(maqueta, en_la_hoja, estudiante["nombre"],
                                         estudiante.get("curso", ""), forma)]
 
     memoria = io.BytesIO()                    # "archivo" que vive en la RAM

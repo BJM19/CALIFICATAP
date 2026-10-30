@@ -154,9 +154,17 @@ h += [p("2. Crear la hoja de respuestas", H1),
       captura("01_crear_arriba.png", pie="Pestaña «Crear hoja»: formulario a la izquierda, "
                                          "vista previa a la derecha."),
       p("2.1 Opciones", H2),
-      lista(["<b>Dígitos del documento:</b> las cifras del documento más largo del curso.",
+      lista(["<b>El estudiante marca:</b> su número de documento o su N.º de lista (ver sección "
+             "2.6, para que quepan más preguntas).",
+             "<b>Dígitos del documento:</b> las cifras del documento más largo del curso.",
              "<b>Numeración:</b> seguida en toda la hoja (1 a 105) o empezando en 1 en cada materia.",
-             "<b>Formas (opcional):</b> para hacer un cuadernillo A y otro B (ver sección 2.3)."]),
+             "<b>Formas (opcional):</b> para hacer un cuadernillo A y otro B (ver sección 2.3).",
+             "<b>Opciones distintas dentro de una materia</b> (como Inglés del ICFES, donde unas "
+             "preguntas van de la A a la H y otras de la A a la C): en «Materia seleccionada», "
+             "campo <b>«Por partes»</b>, escriba por ejemplo <i>1-5: 8, 6-10: 3</i>. Así las "
+             "preguntas 1 a 5 de esa materia tienen A–H, la 6 a la 10 A–C y las demás las "
+             "«Opciones» de la materia. Si una materia necesita más opciones que las otras, el "
+             "programa deja más anchas solo las últimas columnas de la hoja para ahorrar espacio."]),
       p("2.2 Hojas con nombre (recomendado)", H2),
       p("En la sección 5 pulse <b>«Importar lista»</b> y elija el Excel o CSV del curso (por "
         "ejemplo, el del SIMAT). El programa le pregunta cuál columna es el documento y cuál el "
@@ -194,6 +202,26 @@ h += [p("2. Crear la hoja de respuestas", H1),
              "en todas.",
              "Si a un estudiante le falta una hoja, aparece en «Alertas» como «Falta una hoja».",
              "Siempre que se pueda, el programa evita partir una materia entre dos hojas."]),
+      p("2.6 Hoja con N.º de lista (caben más preguntas)", H2),
+      p("Hay dos versiones de la hoja. En «4. Opciones», campo <b>«El estudiante marca»</b>:"),
+      lista(["<b>Su número de documento</b> (la de siempre): cuadrícula de 10 columnas y "
+             "las instrucciones completas.",
+             "<b>Su N.º de lista</b>: en lugar del documento, el estudiante marca su número en "
+             "la lista del curso, con dos cifras (el 7 se marca <b>0 7</b>). La parte de arriba "
+             "es mucho más bajita y las instrucciones caben en un renglón, así que en una sola "
+             "hoja caben unas <b>190 preguntas</b> en lugar de 140."]),
+      captura("19_hoja_lista.png", 15, "Versión con N.º de lista: nombre, curso, forma, "
+                                       "instrucciones resumidas y el N.º en dos renglones."),
+      recuadro("<b>El orden de la lista es lo que importa.</b> El N.º de lista es la posición "
+               "del estudiante en el archivo que importó (el primero es el 1). Use la misma "
+               "lista, en el mismo orden, para imprimir las hojas y para calificar. Con hojas "
+               "con nombre el número ya viene marcado. Hasta 99 estudiantes por lista.",
+               AMARILLO),
+      Spacer(1, 0.2 * cm),
+      p("Los resultados, los boletines y el seguimiento funcionan igual: el programa busca en "
+        "la lista quién es el N.º 7 y usa su documento. Si un estudiante de la lista no tiene "
+        "documento, se le asigna «L07» (L + su número). Si al leer un número no está en la "
+        "lista, «Revisión rápida» lo muestra para corregirlo.", NOTA),
       PageBreak()]
 
 # --- 3. Cuadernillos ---
@@ -219,9 +247,13 @@ h += [p("3. Cuadernillos de preguntas (opcional)", H1),
              "ir seguidas.",
              "<b>Fija:</b> márquela si las opciones no se deben cambiar de orden (por ejemplo si "
              "una dice «Todas las anteriores»).",
+             "<b>Opciones con imagen</b> (por ejemplo «¿Cuál gráfica representa...?»): el botón de imagen de cada opción pone la imagen copiada (o pide un archivo); la X la quita. El texto "
+             "de esa opción puede quedar vacío. En el cuadernillo salen en dos columnas.",
+             "Cada pregunta muestra solo las opciones que tiene en la hoja de respuestas.",
              "<b>A la derecha</b>, la pregunta tal como saldrá en el cuadernillo.",
              "Todo se <b>guarda solo</b> (abajo dice «Guardado»)."]),
       captura("16_editor.png", pie="Editor de preguntas: lista, formulario y vista previa."),
+      captura("18_opciones_imagen.png", pie="Una pregunta con imágenes en las opciones."),
       p("3.2 Traer las preguntas de un Word", H2),
       p("Si ya tiene las preguntas en Word, pulse <b>«Traer de un Word…»</b>. El documento debe "
         "seguir este formato (el botón «Word de ejemplo» crea uno):"),
@@ -231,15 +263,30 @@ h += [p("3. Cuadernillos de preguntas (opcional)", H1),
              "La correcta marcada con un asterisco (*C. ...) o con una línea «Respuesta: C».",
              "Para un texto compartido: «RESPONDA LAS PREGUNTAS 25 A 28 DE ACUERDO CON LA "
              "SIGUIENTE INFORMACIÓN» y después el texto.",
-             "Las imágenes pegadas en el enunciado o en el texto también se traen. Las tablas de "
-             "Word no: péguelas como imagen."]),
+             "Las imágenes pegadas en el enunciado, en el texto o en una opción también se "
+             "traen. Las tablas de Word no: péguelas como imagen."]),
       p("El programa le dice cuántas preguntas encontró y qué no entendió, y le pregunta si "
         "reemplaza las que ya tenían texto. Después revíselas en el editor."),
       recuadro("<b>¿Prefiere Excel?</b> Todo queda en <b>banco_preguntas.xlsx</b> (carpeta "
                "«cuadernillos» del examen), que también se puede llenar directamente: una fila por "
                "pregunta, imágenes pegadas sobre la celda «Imagen» y los textos compartidos en la "
                "hoja «Contextos». Luego pulse «Revisar». No use el editor y Excel al mismo tiempo."),
-      p("3.3 Generar los cuadernillos", H2),
+      p("3.3 Biblioteca de preguntas del colegio", H2),
+      p("La biblioteca junta las preguntas de todos los exámenes para <b>reutilizarlas</b>. "
+        "Se guarda en la carpeta «biblioteca» del programa (en ese computador)."),
+      lista(["<b>Guardar:</b> en el editor, «Guardar en la biblioteca…»: la pregunta actual, "
+             "las de la materia o todo el examen, con un <b>tema</b> (ej. «Fracciones») y el grado. "
+             "Solo se guardan las preguntas completas y las repetidas no se duplican.",
+             "<b>Traer:</b> en el editor de OTRO examen, párese en la pregunta donde quiere "
+             "empezar y pulse «Traer de la biblioteca…». Busque por materia, grado, tema o "
+             "palabras; a la derecha ve cada pregunta como saldrá. Elija una o varias (Ctrl o "
+             "Shift) y pulse «Traer al examen»: quedan seguidas desde esa pregunta.",
+             "Si una pregunta tiene un texto compartido, se traen también las demás preguntas de "
+             "ese texto.",
+             "El botón «Biblioteca de preguntas del colegio» de la pestaña permite revisarla y "
+             "borrar preguntas."]),
+      captura("17_biblioteca.png", pie="Biblioteca: buscar preguntas y traerlas al examen."),
+      p("3.4 Generar los cuadernillos", H2),
       lista(["Elija qué cambia en las formas B, C...: el <b>orden de las preguntas</b> (dentro "
              "de cada prueba; las de un mismo texto se mueven juntas) y/o el <b>orden de las "
              "opciones</b>. La forma A queda en el orden del Excel.",
@@ -257,7 +304,7 @@ h += [p("3. Cuadernillos de preguntas (opcional)", H1),
                "diga que sí y los cuadernillos impresos siguen sirviendo. Un orden nuevo solo "
                "conviene antes de imprimir.", AMARILLO),
       Spacer(1, 0.3 * cm),
-      p("3.4 Resultados con las formas juntas", H2),
+      p("3.5 Resultados con las formas juntas", H2),
       p("Como el programa sabe que la pregunta 5 de la forma B es, por ejemplo, la 12 de la "
         "forma A, en «Resultados» → «Preguntas» puede elegir <b>«Ver la forma: Todas»</b>: cada "
         "pregunta aparece una sola vez, con los estudiantes de todas las formas (los números son "

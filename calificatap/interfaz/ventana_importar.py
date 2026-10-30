@@ -65,9 +65,14 @@ class VentanaImportar(tk.Toplevel):
             ttk.Label(caja, text=texto + ":").grid(row=i, column=0, sticky="w", pady=3)
             var = tk.StringVar(value=adivinadas.get(campo) or "")
             ttk.Combobox(caja, textvariable=var, state="readonly", width=35,
-                         values=([""] if campo == "curso" else []) + opciones).grid(
+                         values=([""] if campo != "nombre" else []) + opciones).grid(
                 row=i, column=1, sticky="w", padx=8)
             self.vars[campo] = var
+        ttk.Label(caja, style="Subtitulo.TLabel", wraplength=420, justify="left",
+                  text="El N.º de lista de cada estudiante es su puesto en este archivo "
+                       "(el primero es el 1). El documento solo se puede dejar vacío si las "
+                       "hojas son «con N.º de lista».").grid(row=3, column=0, columnspan=2,
+                                                            sticky="w", pady=(6, 0))
 
         ttk.Button(self, text="Importar", style="Primario.TButton",
                    command=self.aceptar).pack(anchor="e", pady=(12, 0))
@@ -75,10 +80,15 @@ class VentanaImportar(tk.Toplevel):
 
     def aceptar(self) -> None:
         doc, nombre = self.vars["documento"].get(), self.vars["nombre"].get()
-        if not doc or not nombre:
-            messagebox.showwarning("Faltan columnas", "Elija la columna del documento y la del nombre.",
+        if not nombre:
+            messagebox.showwarning("Falta una columna", "Elija la columna del nombre.",
                                    parent=self)
             return
-        lista = lista_limpia(self.tabla, doc, nombre, self.vars["curso"].get() or None)
+        if not doc and not messagebox.askyesno(
+                "Sin documento",
+                "No eligió la columna del documento. Así la lista solo sirve con las hojas "
+                "«con N.º de lista».\n\n¿Continuar?", parent=self):
+            return
+        lista = lista_limpia(self.tabla, doc or None, nombre, self.vars["curso"].get() or None)
         self.al_aceptar(lista)
         self.destroy()

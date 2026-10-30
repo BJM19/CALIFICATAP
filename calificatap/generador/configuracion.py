@@ -28,11 +28,31 @@ class Materia:
     nombre: str        # nombre que se imprime, ej. "Matemáticas"
     preguntas: int     # cuántas preguntas tiene
     opciones: int      # cuántas opciones por pregunta (A, B, C, D...)
+    # Opcional: partes con OTRO número de opciones, como en Inglés del ICFES
+    # (preguntas 1-5 con A-H, 6-10 con A-C...). Lista de (desde, hasta, opciones),
+    # contando desde 1 dentro de la materia.
+    partes: list[tuple[int, int, int]] = field(default_factory=list)
+
+    def opciones_de(self, numero: int) -> int:
+        """Cuántas opciones tiene la pregunta 'numero' (1, 2... dentro de la materia)."""
+        for desde, hasta, opciones in self.partes:
+            if desde <= numero <= hasta:
+                return opciones
+        return self.opciones
+
+    def letras_de(self, numero: int) -> list[str]:
+        """Opciones de una pregunta, ej. ['A', 'B', 'C'] si tiene 3."""
+        return list(diseno.LETRAS_OPCIONES[: self.opciones_de(numero)])
 
     @property
     def letras(self) -> list[str]:
         """Lista de opciones, ej. ['A', 'B', 'C', 'D'] si opciones = 4."""
         return list(diseno.LETRAS_OPCIONES[: self.opciones])
+
+    @property
+    def opciones_max(self) -> int:
+        """La pregunta con más opciones (define el ancho de la columna)."""
+        return max([self.opciones] + [o for _, _, o in self.partes])
 
     def etiqueta(self, numero: int) -> str:
         """Nombre único de una pregunta: etiqueta(3) → 'MAT_03'.
@@ -53,6 +73,15 @@ class ConfiguracionExamen:
     formas: int = 1                  # 1 = sin formas; 2 = A y B; 3 = A, B y C...
     codigo_examen: int | None = None # número que identifica el examen (lo asigna generar.py)
     materias: list[Materia] = field(default_factory=list)
+    # Cómo se identifica al estudiante en la hoja:
+    #   "documento" → cuadrícula con el número de documento (4 a 12 cifras)
+    #   "lista"     → solo su N.º en la lista del curso (2 cifras): la parte de
+    #                 arriba de la hoja se achica y caben MÁS preguntas
+    identificacion: str = "documento"
+
+    @property
+    def por_lista(self) -> bool:
+        return self.identificacion == "lista"
 
     @property
     def total_preguntas(self) -> int:
@@ -86,6 +115,52 @@ def _entero(datos: dict, clave: str, donde: str, minimo: int, maximo: int) -> in
     _exigir(minimo <= valor <= maximo,
             f"En {donde}, '{clave}' debe estar entre {minimo} y {maximo} (llegó {valor}).")
     return valor
+
+
+def texto_a_partes(texto: str) -> list[dict]:
+    """
+    Lo que escribe el docente → lista de partes.
+        "1-5: 8, 6-10: 3"  →  [{"desde": 1, "hasta": 5, "opciones": 8},
+                                {"desde": 6, "hasta": 10, "opciones": 3}]
+    Lanza ValueError con un mensaje claro si no se entiende.
+    """
+    partes = []
+    for trozo in [t.strip() for t in re.split(r"[,;]", texto) if t.strip()]:
+        coincide = re.fullmatch(r"(\d+)\s*(?:-|a|al|–)\s*(\d+)\s*[:=]\s*(\d+)|(\d+)\s*[:=]\s*(\d+)",
+                                trozo)
+        if not coincide:
+            raise ValueError(f"No se entiende «{trozo}». Escriba, por ejemplo: 1-5: 8, 6-10: 3")
+        if coincide.group(1):
+            desde, hasta, opciones = map(int, coincide.group(1, 2, 3))
+        else:
+            desde = hasta = int(coincide.group(4))
+            opciones = int(coincide.group(5))
+        partes.append({"desde": desde, "hasta": hasta, "opciones": opciones})
+    return partes
+
+
+def partes_a_texto(partes: list[dict]) -> str:
+    return ", ".join(f"{p['desde']}-{p['hasta']}: {p['opciones']}" if p["desde"] != p["hasta"]
+                     else f"{p['desde']}: {p['opciones']}" for p in partes or [])
+
+
+def _leer_partes(m: dict, donde: str, preguntas: int) -> list[tuple[int, int, int]]:
+    """Valida las partes de una materia (si tiene)."""
+    partes = m.get("partes") or []
+    _exigir(isinstance(partes, list), f"En {donde}, 'partes' debe ser una lista.")
+    resultado, usadas = [], set()
+    for p in partes:
+        _exigir(isinstance(p, dict), f"En {donde}, cada parte debe ser un objeto {{ ... }}.")
+        desde = _entero(p, "desde", donde, 1, preguntas)
+        hasta = _entero(p, "hasta", donde, desde, preguntas)
+        opciones = _entero(p, "opciones", donde, 2, len(diseno.LETRAS_OPCIONES))
+        rango = set(range(desde, hasta + 1))
+        cruce = rango & usadas
+        _exigir(not cruce, f"En {donde}, las partes se cruzan (la pregunta "
+                           f"{min(cruce) if cruce else ''} está en dos partes).")
+        usadas |= rango
+        resultado.append((desde, hasta, opciones))
+    return sorted(resultado)
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +205,10 @@ def configuracion_desde_datos(datos: dict, carpeta_base: str | Path = ".") -> Co
 
     # --- Sección "documento" (opcional) ---
     documento = datos.get("documento", {"digitos": 10})
+    _exigir(isinstance(documento, dict), "La sección 'documento' debe ser un objeto { ... }.")
+    identificacion = documento.get("tipo", "documento") or "documento"
+    _exigir(identificacion in ("documento", "lista"),
+            "En 'documento', 'tipo' debe ser \"documento\" o \"lista\".")
 
     # --- Sección "opciones" (opcional) ---
     opciones = datos.get("opciones", {})
@@ -144,7 +223,10 @@ def configuracion_desde_datos(datos: dict, carpeta_base: str | Path = ".") -> Co
         nombre_examen=_texto(examen, "nombre", "'examen'"),
         grado=_texto(examen, "grado", "'examen'"),
         fecha=_texto(examen, "fecha", "'examen'", obligatorio=False),
-        digitos_documento=_entero(documento, "digitos", "'documento'", 4, 12),
+        # Con N.º de lista siempre son 2 cifras (hasta 99 estudiantes)
+        digitos_documento=(2 if identificacion == "lista"
+                           else _entero(documento, "digitos", "'documento'", 4, 12)),
+        identificacion=identificacion,
         numeracion=numeracion,
         formas=_entero({"formas": opciones.get("formas", 1)}, "formas", "'opciones'",
                        1, diseno.MAX_FORMAS),
@@ -169,11 +251,13 @@ def configuracion_desde_datos(datos: dict, carpeta_base: str | Path = ".") -> Co
         _exigir(codigo not in codigos_vistos, f"El código '{codigo}' está repetido.")
         codigos_vistos.add(codigo)
 
+        preguntas = _entero(m, "preguntas", donde, 1, 200)
         configuracion.materias.append(Materia(
             codigo=codigo,
             nombre=_texto(m, "nombre", donde),
-            preguntas=_entero(m, "preguntas", donde, 1, 200),
+            preguntas=preguntas,
             opciones=_entero(m, "opciones", donde, 2, len(diseno.LETRAS_OPCIONES)),
+            partes=_leer_partes(m, f"«{m.get('nombre', codigo)}»", preguntas),
         ))
 
     return configuracion

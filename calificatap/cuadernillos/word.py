@@ -16,7 +16,8 @@ formato sencillo, el programa las pasa al banco de preguntas:
     RESPONDA LAS PREGUNTAS 26 A 29 DE ACUERDO CON LA SIGUIENTE INFORMACIÓN
     (el texto, tabla o imagen compartidos)    ← se asigna a las 4 preguntas siguientes
 
-    - Las imágenes pegadas en el enunciado se vuelven la imagen de la pregunta.
+    - Las imágenes pegadas en el enunciado se vuelven la imagen de la pregunta, y las
+      pegadas en una opción (o justo debajo de ella), la imagen de esa opción.
     - Una línea «Fija» deja las opciones de esa pregunta sin barajar.
     - También entiende las listas numeradas automáticas de Word (1., 2., ... y a., b., ...).
 """
@@ -73,6 +74,7 @@ class _Leida:
     enunciado: list[str] = field(default_factory=list)
     imagen: bytes | None = None
     opciones: list[str] = field(default_factory=list)
+    opciones_imagen: list = field(default_factory=list)
     correcta: str = ""
     fija: bool = False
     contexto: str = ""
@@ -217,9 +219,7 @@ def leer_word(examen: Examen, ruta: str | Path) -> ResultadoWord:
             if marca:
                 actual.correcta = LETRAS[len(actual.opciones)]
             actual.opciones.append(contenido.strip())
-            if imagenes:
-                resultado.avisos.append("Una opción tiene una imagen: las opciones solo pueden "
-                                        "tener texto (la imagen no se importó).")
+            actual.opciones_imagen.append(imagenes[0] if imagenes else None)
             estado = "opciones"
             continue
         # 5) Pregunta nueva (escrita «12.» o lista automática de nivel 1)
@@ -241,8 +241,11 @@ def leer_word(examen: Examen, ruta: str | Path) -> ResultadoWord:
                 actual.enunciado.append(texto)
             if imagenes and actual.imagen is None:
                 actual.imagen = imagenes[0]
-        elif actual and estado == "opciones" and texto and actual.opciones:
-            actual.opciones[-1] += " " + texto
+        elif actual and estado == "opciones" and actual.opciones:
+            if texto:
+                actual.opciones[-1] += " " + texto
+            if imagenes and not actual.opciones_imagen[-1]:
+                actual.opciones_imagen[-1] = imagenes[0]     # imagen debajo de «C.»
         # (títulos, instrucciones generales, etc.: se ignoran)
     cerrar_contexto()
 
@@ -276,7 +279,8 @@ def leer_word(examen: Examen, ruta: str | Path) -> ResultadoWord:
         siguiente[codigo] = materias[codigo].etiquetas().index(etiqueta) + 1
         resultado.preguntas[etiqueta] = Pregunta(
             etiqueta, codigo, "\n".join(leida.enunciado), leida.opciones, leida.correcta,
-            leida.contexto, leida.imagen, leida.fija)
+            leida.contexto, leida.imagen, leida.fija,
+            opciones_imagen=leida.opciones_imagen if any(leida.opciones_imagen) else [])
         if not leida.correcta:
             resultado.avisos.append(f"Pregunta {numeros[etiqueta]}: no se encontró la respuesta "
                                     "correcta (márquela con * o «Respuesta: X»).")
@@ -340,7 +344,8 @@ def crear_plantilla_word(examen: Examen, ruta: str | Path) -> Path:
         "• Marque la correcta con un asterisco (*C. ...) o escriba debajo «Respuesta: C».\n"
         "• Para un texto que comparten varias preguntas, escriba antes: «RESPONDA LAS "
         "PREGUNTAS 25 A 28 DE ACUERDO CON LA SIGUIENTE INFORMACIÓN» y luego el texto.\n"
-        "• Puede pegar imágenes (gráficas, fórmulas) en el enunciado o en el texto compartido.\n"
+        "• Puede pegar imágenes (gráficas, fórmulas) en el enunciado, en el texto compartido "
+        "o en una opción (por ejemplo «¿Cuál gráfica representa...?»).\n"
         "• Escriba «Fija» debajo de una pregunta si sus opciones no se deben cambiar de orden.")
     numeros = examen.numeros_impresos()
     for i, m in enumerate(examen.materias):
@@ -361,7 +366,7 @@ def crear_plantilla_word(examen: Examen, ruta: str | Path) -> Path:
             documento.add_paragraph("(Escriba aquí el texto, o pegue la tabla o gráfica como imagen.)")
             for k in range(2):
                 documento.add_paragraph(f"{primero + k}. (Escriba aquí la pregunta)")
-                for letra in LETRAS[:m.opciones]:
+                for letra in LETRAS[:m.opciones_de(m.etiquetas()[k])]:
                     documento.add_paragraph(f"{letra}. ")
                 documento.add_paragraph("Respuesta: ")
     documento.save(str(ruta))

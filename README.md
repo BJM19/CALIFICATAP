@@ -57,6 +57,10 @@ Además:
 
 - **Hojas con nombre:** se importa la lista del curso (Excel o CSV, por ejemplo la del SIMAT) y
   se imprime una hoja por estudiante con su nombre y su documento **ya marcados**.
+- **Dos versiones de hoja:** con el **número de documento** (cuadrícula completa) o con el
+  **N.º de lista** (dos cifras, encabezado compacto e instrucciones en un renglón): en una sola
+  hoja caben unas **190 preguntas en vez de 140**. El estudiante se reconoce por su posición en
+  la lista del curso.
 - **Formas A/B/C/D (opcional):** una clave por forma. Si los cuadernillos los arma el programa,
   la clave de cada forma se calcula sola y en «Resultados» se pueden ver **las formas juntas**
   (cada pregunta una vez, con todos los estudiantes).
@@ -73,6 +77,12 @@ Además:
 - **Revisión rápida:** recorre una por una las preguntas con doble marca, las formas sin marcar y
   los documentos incompletos o fuera de la lista, mostrando esa parte de la imagen ampliada.
   Se responde con el teclado (A, B, C… o espacio = en blanco) y cada cambio se guarda enseguida.
+- **Opciones por partes:** dentro de una materia, unas preguntas pueden tener A–H y otras A–C o
+  A–D (como Inglés del ICFES). La hoja de respuestas muestra en cada pregunta solo sus opciones y,
+  si hace falta, deja más anchas solo las últimas columnas para no gastar otra hoja.
+- **Opciones con imagen** en los cuadernillos («¿Cuál gráfica representa…?»), en dos columnas.
+- **Biblioteca de preguntas del colegio:** guarda preguntas (con tema y grado) para reutilizarlas en
+  otros exámenes; se buscan por materia, tema o texto y se traen con un clic.
 - **Anular preguntas:** una pregunta mal redactada o con dos respuestas válidas se puede dar por
   buena a todos o sacar del cálculo; las notas se recalculan solas y se puede deshacer.
 - **Boletines individuales** en PDF, una página por estudiante.
@@ -209,6 +219,7 @@ CalificaTAP/
 ├── datos/                       ← listas y claves locales (no se suben a GitHub)
 ├── escaneos/                    ← PDF escaneados de las hojas (no se suben a GitHub)
 ├── salidas/                     ← lo que genera el programa, una carpeta por examen (no se sube)
+├── biblioteca/                  ← preguntas guardadas para reutilizar (no se sube)
 ├── externo/OMRChecker/          ← motor de lectura (se descarga aparte)
 ├── calificatap/
 │   ├── examenes.py              ← encuentra los exámenes generados y sus archivos
@@ -218,6 +229,7 @@ CalificaTAP/
 │   │   ├── formas.py            ←   baraja preguntas/opciones; formas.json; claves
 │   │   ├── pdf.py               ←   dibuja el cuadernillo (reportlab, dos columnas) y la vista previa
 │   │   ├── word.py              ←   importa preguntas desde Word (.docx)
+│   │   ├── biblioteca.py        ←   biblioteca de preguntas del colegio (biblioteca/)
 │   │   ├── formulas.py          ←   fórmula «a lo LaTeX» → imagen (matplotlib, sin internet)
 │   │   └── generar.py           ←   une todo
 │   ├── generador/               ← Módulo 1
@@ -250,6 +262,7 @@ CalificaTAP/
 │       ├── ventana_compartir.py ←   exportar / importar examen
 │       ├── ventana_revision.py  ←   revisión rápida de las hojas amarillas
 │       ├── editor_preguntas.py  ←   editor de preguntas del cuadernillo
+│       ├── ventana_biblioteca.py ←  buscar / guardar preguntas en la biblioteca
 │       ├── estilos.py, utilidades.py
 ├── docs/
 │   ├── crear_manual.py          ← arma «Manual CalificaTAP.pdf»
@@ -279,6 +292,8 @@ o `python pruebas/crear_hojas_de_prueba.py`.
 - [x] Prueba con hojas impresas: PDF ✔ · fotos de celular ✘ (retiradas)
 - [x] Resultados, Excel, seguimiento, boletines
 - [x] Hojas con nombre, formas, código del examen, varias hojas
+- [x] Biblioteca de preguntas, opciones con imagen y opciones por partes
+- [x] Hoja con N.º de lista (más preguntas por hoja)
 - [ ] Instalador `.exe` (sin necesidad de instalar Python)
 - [x] Cuadernillos por forma (banco en Excel, estilo Saber) con clave automática
 - [ ] Pruebas unitarias con pytest

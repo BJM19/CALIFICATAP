@@ -24,3 +24,6 @@ Claude outputs/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Biblioteca de preguntas del colegio (local, con las respuestas)
+biblioteca/
