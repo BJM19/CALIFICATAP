@@ -765,6 +765,8 @@ class VentanaListo(tk.Toplevel):
                    command=lambda: abrir_con_el_sistema(resultado.carpeta)).pack(side="left", padx=8)
         ttk.Button(botones, text="Cerrar", command=self.destroy).pack(side="right")
         tk.Label(self, bg=estilos.FONDO_PANEL, fg=estilos.TEXTO_SUAVE, font=(estilos.FAMILIA, 9),
-                 text="Cuando los estudiantes la llenen, siga en la pestaña «2. Leer hojas».").pack(
+                 text="Para armar los cuadernillos de preguntas, vaya a «2. Cuadernillos». "
+                      "Cuando los estudiantes llenen las hojas, siga en «3. Leer hojas».",
+                 wraplength=520, justify="left").pack(
             anchor="w", pady=(14, 0))
         self.grab_set()

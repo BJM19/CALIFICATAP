@@ -1,11 +1,12 @@
 """
 app.py — Ventana principal de CalificaTAP.
 
-Tiene un encabezado y tres pestañas, una por módulo:
-    1. Crear hoja     (Módulo 1: generador)
-    2. Leer hojas     (Módulo 2: lector con OMRChecker)
-    3. Resultados     (Módulo 3: calificación, gráficos y Excel)
-    4. Seguimiento    (compara varios exámenes: ¿el curso mejora?)
+Tiene un encabezado y cinco pestañas:
+    1. Crear hoja     (Módulo 1: generador de la hoja de respuestas)
+    2. Cuadernillos   (Módulo 0: banco de preguntas → cuadernillos por forma y claves)
+    3. Leer hojas     (Módulo 2: lector con OMRChecker)
+    4. Resultados     (Módulo 3: calificación, gráficos y Excel)
+    5. Seguimiento    (compara varios exámenes: ¿el curso mejora?)
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 from tkinter import ttk
 
 from . import estilos
+from .pestana_cuadernillos import PestanaCuadernillos
 from .pestana_generador import PestanaGenerador
 from .pestana_lector import PestanaLector
 from .pestana_resultados import PestanaResultados
@@ -72,20 +74,22 @@ class AplicacionCalificaTAP(tk.Tk):
 
         self.generador = PestanaGenerador(self.pestanas, RAIZ_PROYECTO,
                                           al_generar=self._examen_generado)
+        self.cuadernillos = PestanaCuadernillos(self.pestanas, RAIZ_PROYECTO, self.var_examen)
         self.lector = PestanaLector(self.pestanas, RAIZ_PROYECTO, self.var_examen)
         self.resultados = PestanaResultados(self.pestanas, RAIZ_PROYECTO, self.var_examen)
-        self.pestanas.add(self.generador, text="  1. Crear hoja  ")
-        self.pestanas.add(self.lector, text="  2. Leer hojas  ")
         self.seguimiento = PestanaSeguimiento(self.pestanas, RAIZ_PROYECTO, self.var_examen)
-        self.pestanas.add(self.resultados, text="  3. Resultados  ")
-        self.pestanas.add(self.seguimiento, text="  4. Seguimiento  ")
+        self.pestanas.add(self.generador, text="  1. Crear hoja  ")
+        self.pestanas.add(self.cuadernillos, text="  2. Cuadernillos  ")
+        self.pestanas.add(self.lector, text="  3. Leer hojas  ")
+        self.pestanas.add(self.resultados, text="  4. Resultados  ")
+        self.pestanas.add(self.seguimiento, text="  5. Seguimiento  ")
         self.pestanas.bind("<<NotebookTabChanged>>", lambda e: self._cambio_de_pestana())
 
         # Al cerrar, recordar lo que había en pantalla
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
 
     def _cambio_de_pestana(self) -> None:
-        """Al abrir la pestaña 2 o 3, se actualiza (por si hay exámenes u hojas nuevas)."""
+        """Al abrir una pestaña, se actualiza (por si hay exámenes u hojas nuevas)."""
         actual = self.nametowidget(self.pestanas.select())
         if hasattr(actual, "al_mostrar"):
             actual.al_mostrar()

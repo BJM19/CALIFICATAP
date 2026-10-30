@@ -33,6 +33,7 @@ import pandas as pd
 
 from ..examenes import Examen
 from ..lector.hojas import ERROR, HojaLeida, normalizar_documento
+from ..cuadernillos.formas import a_letra_original, cargar_mapa
 from .clave import cargar_anuladas
 
 
@@ -108,6 +109,18 @@ class Resultados:
     formas: pd.Series = field(default_factory=pd.Series)           # forma de cada estudiante
     claves: dict = field(default_factory=dict)                     # {forma: {etiqueta: letra}}
     anuladas: dict = field(default_factory=dict)                   # {forma: {etiqueta: modo}}
+
+    @property
+    def formas_juntas(self) -> bool:
+        """¿Hay análisis con las formas juntas? (cuadernillos armados por CalificaTAP)"""
+        return not self.por_pregunta.empty and (self.por_pregunta["forma"] == "*").any()
+
+    @property
+    def preguntas_analisis(self) -> pd.DataFrame:
+        """Las filas para analizar preguntas: las formas juntas si existen; si no, todas."""
+        if self.formas_juntas:
+            return self.por_pregunta[self.por_pregunta["forma"] == "*"]
+        return self.por_pregunta
 
     @property
     def con_puntaje(self) -> bool:
@@ -349,49 +362,87 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
     nombre_materia = {e: m.nombre for m in materias for e in m.etiquetas()}
     opciones_de = {e: m.opciones for m in materias for e in m.etiquetas()}
     filas_pregunta = []
-    for forma, clave in claves.items():
-        filas_forma = formas[formas == forma].index
-        if not len(filas_forma):
-            continue
-        # Grupos alto y bajo (solo si hay suficientes estudiantes en esta forma)
-        hay_grupos = len(filas_forma) >= MIN_PARA_GRUPOS
-        puntajes = reales.loc[filas_forma].mean(axis=1)
+
+    # Si los cuadernillos los armó CalificaTAP (formas.json), se sabe qué pregunta
+    # del banco es cada una en cada forma: se pueden JUNTAR las formas y analizar
+    # cada pregunta una sola vez (con todos los estudiantes). En ese caso, la
+    # alerta de "posible error en la clave" se hace con las formas juntas.
+    mapa = cargar_mapa(examen).get("formas", {}) if hay_formas else {}
+    mapa = mapa if set(mapa) >= set(f for f in claves) and claves else {}
+
+    def analizar(texto_forma: str, marcadas_df: pd.DataFrame, reales_df: pd.DataFrame,
+                 clave: dict[str, str], anuladas_forma: dict[str, str], buscar_sospecha: bool,
+                 numeracion: str = "") -> None:
+        """Agrega a filas_pregunta una fila por pregunta (análisis de ítems)."""
+        filas_idx = marcadas_df.index
+        hay_grupos = len(filas_idx) >= MIN_PARA_GRUPOS
+        puntajes = reales_df.mean(axis=1)
         alto, bajo = grupos_alto_bajo(puntajes)
         # Para sospechar de la clave se mira el mejor tercio (mínimo 5 estudiantes)
-        mejores = puntajes.sort_values(ascending=False).index[
-            :max(5, round(len(puntajes) / 3))]
+        mejores = puntajes.sort_values(ascending=False).index[:max(5, round(len(puntajes) / 3))]
         for e in [x for x in todas if x in clave]:
-            marcadas = respuestas.loc[filas_forma, e]
-            pct = round(reales.loc[filas_forma, e].mean() * 100, 1)
-            anulada = anuladas.get(forma, {}).get(e, "")
+            marcadas = marcadas_df[e]
+            pct = round(reales_df[e].mean() * 100, 1)
+            anulada = anuladas_forma.get(e, "")
             # La opción incorrecta más elegida (el "distractor" más fuerte)
             erradas = marcadas[(marcadas != clave[e]) & (marcadas.str.len() == 1)]
             distractor = erradas.value_counts().idxmax() if not erradas.empty else ""
             # Discriminación: % de acierto del grupo alto − % del grupo bajo (de −1 a 1)
-            disc = (reales.loc[alto, e].mean() - reales.loc[bajo, e].mean()
+            disc = (reales_df.loc[alto, e].mean() - reales_df.loc[bajo, e].mean()
                     if hay_grupos else float("nan"))
-            # Con pocos estudiantes (menos de 10 en esta forma) no se sospecha: sería azar
+            # Con pocos estudiantes (menos de 10) no se sospecha: sería azar
             sospecha = (sospecha_de_clave(marcadas, clave[e], mejores, pct)
-                        if hay_grupos and not anulada else "")   # si ya se anuló, no se avisa
-            fila = {"forma": forma if hay_formas else "", "pregunta": numeros[e], "etiqueta": e,
+                        if buscar_sospecha and hay_grupos and not anulada else "")
+            fila = {"forma": texto_forma, "pregunta": numeros[e], "etiqueta": e,
                     "materia": nombre_materia[e], "clave": clave[e], "acierto": pct,
                     "dificultad": dificultad(pct),
                     "discriminacion": round(disc, 2) if not pd.isna(disc) else float("nan"),
                     "calidad": calidad(disc), "sospecha_clave": sospecha,
-                    "respondieron": len(filas_forma),
+                    "respondieron": len(filas_idx),
                     "en_blanco": int((marcadas == "").sum()),
                     "doble_marca": int((marcadas.str.len() > 1).sum()),
                     "distractor": distractor, "anulada": anulada}
             if sospecha:
-                texto_forma = f" de la forma {forma}" if hay_formas else ""
                 alertas.insert(0, ("⚠ Revise la clave",
-                                   f"Pregunta {numeros[e]}{texto_forma} ({nombre_materia[e]}): "
+                                   f"Pregunta {numeros[e]}{numeracion} ({nombre_materia[e]}): "
                                    f"la clave dice {clave[e]}, pero la mayoría de los mejores "
                                    f"estudiantes marcó {sospecha}. ¿Está bien la clave?"))
             # Cuántos estudiantes marcaron cada opción (A, B, C...)
             for letra in "ABCDEFGH"[:opciones_de[e]]:
                 fila[letra] = int((marcadas == letra).sum())
             filas_pregunta.append(fila)
+
+    for forma, clave in claves.items():
+        filas_forma = formas[formas == forma].index
+        if len(filas_forma):
+            analizar(forma if hay_formas else "", respuestas.loc[filas_forma],
+                     reales.loc[filas_forma], clave, anuladas.get(forma, {}),
+                     buscar_sospecha=not mapa,
+                     numeracion=f" de la forma {forma}" if hay_formas else "")
+
+    if mapa:
+        # Todo "traducido" a las preguntas y opciones del BANCO (= numeración de la forma A)
+        marcadas_u = pd.DataFrame("", index=respuestas.index, columns=todas)
+        reales_u = pd.DataFrame(float("nan"), index=respuestas.index, columns=todas)
+        clave_u: dict[str, str] = {}
+        anuladas_u: dict[str, str] = {}
+        for forma, mapa_forma in mapa.items():
+            filas_forma = formas[formas == forma].index
+            for e, info in mapa_forma.items():
+                original = info["original"]
+                if e in claves.get(forma, {}):
+                    clave_u.setdefault(original, a_letra_original(mapa_forma, e, claves[forma][e]))
+                if anuladas.get(forma, {}).get(e):
+                    anuladas_u[original] = anuladas[forma][e]
+                if len(filas_forma):
+                    marcadas_u.loc[filas_forma, original] = [
+                        a_letra_original(mapa_forma, e, v) for v in respuestas.loc[filas_forma, e]]
+                    reales_u.loc[filas_forma, original] = reales.loc[filas_forma, e].values
+        con_forma = formas[formas.isin(list(mapa))].index
+        if len(con_forma):
+            analizar("*", marcadas_u.loc[con_forma], reales_u.loc[con_forma], clave_u,
+                     anuladas_u, buscar_sospecha=True, numeracion=" (numeración de la forma A)")
+
     # Las materias con menos opciones quedan con "" en las letras que no tienen
     por_pregunta = pd.DataFrame(filas_pregunta)
     for letra in "ABCDEFGH":

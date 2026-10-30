@@ -122,10 +122,12 @@ h += [p("1. ¿Qué hace CalificaTAP?", H1),
       tabla([["Pestaña", "Para qué sirve"],
              ["1. Crear hoja", "Diseñar la hoja (materias, preguntas, opciones) e imprimirla, "
                                "en blanco o con el nombre de cada estudiante."],
-             ["2. Leer hojas", "Cargar el PDF del escáner. El programa lee cada hoja "
+             ["2. Cuadernillos", "Escribir las preguntas en Excel y obtener los cuadernillos de "
+                                 "cada forma (A, B...) con la clave lista. Opcional."],
+             ["3. Leer hojas", "Cargar el PDF del escáner. El programa lee cada hoja "
                                "y le muestra lo que detectó."],
-             ["3. Resultados", "Escribir la clave y ver notas, gráficos y alertas. Exportar a Excel."],
-             ["4. Seguimiento", "Comparar varios exámenes para ver si el curso mejora."]],
+             ["4. Resultados", "Escribir la clave y ver notas, gráficos y alertas. Exportar a Excel."],
+             ["5. Seguimiento", "Comparar varios exámenes para ver si el curso mejora."]],
             [4, 12.5]),
       Spacer(1, 0.4 * cm),
       p("1.1 Instalación (una sola vez, con internet)", H2),
@@ -165,10 +167,12 @@ h += [p("2. Crear la hoja de respuestas", H1),
                                         "muestra la hoja del primer estudiante."),
       p("2.3 Formas A y B (opcional)", H2),
       p("Si elige 2 formas, la hoja trae la casilla <b>FORMA</b>. La hoja de respuestas es la "
-        "misma para todos; lo que cambia es el <b>cuadernillo de preguntas</b>: en el cuadernillo "
-        "B usted cambia el orden de las opciones, así la respuesta correcta queda en otra letra. "
-        "En «Resultados» escribirá una clave para cada forma. Con hojas con nombre, las formas se "
-        "reparten en orden (A, B, A, B...) y ya vienen marcadas."),
+        "misma para todos; lo que cambia es el <b>cuadernillo de preguntas</b>: en la forma B "
+        "cambia el orden de las preguntas o de las opciones. Puede armar los cuadernillos usted "
+        "mismo (y escribir en «Resultados» una clave por forma) o dejar que el programa los arme "
+        "en la pestaña <b>«2. Cuadernillos»</b> (capítulo 3), con la clave de cada forma lista. "
+        "Con hojas con nombre, las formas se reparten en orden (A, B, A, B...) y ya vienen "
+        "marcadas."),
       p("2.4 Generar e imprimir", H2),
       p("Pulse <b>«Generar hoja de respuestas»</b>. Se abre una ventana con el botón para abrir "
         "el PDF."),
@@ -192,15 +196,85 @@ h += [p("2. Crear la hoja de respuestas", H1),
              "Siempre que se pueda, el programa evita partir una materia entre dos hojas."]),
       PageBreak()]
 
-# --- 3. Día del examen y escaneo ---
-h += [p("3. El día del examen", H1),
+# --- 3. Cuadernillos ---
+h += [p("3. Cuadernillos de preguntas (opcional)", H1),
+      p("En la pestaña <b>«2. Cuadernillos»</b> el programa arma los cuadernillos de preguntas con "
+        "un estilo parecido al de las pruebas Saber: portada con la forma, dos columnas, cada "
+        "prueba con su franja de color y los textos compartidos con «RESPONDA LAS PREGUNTAS... DE "
+        "ACUERDO CON LA SIGUIENTE INFORMACIÓN». Usted escribe las preguntas <b>una sola vez</b> "
+        "y el programa hace las formas y sus claves."),
+      p("3.1 Escribir las preguntas", H2),
+      p("Elija el examen (debe haber creado su hoja en la pestaña 1) y pulse <b>«Escribir las "
+        "preguntas»</b>. Se abre el editor:"),
+      lista(["<b>A la izquierda</b>, todas las preguntas por prueba: ✔ lista, ✏ le falta algo, "
+             "un círculo vacío: sin escribir. «Ir a la siguiente sin terminar» lleva a la que falta.",
+             "<b>En el centro</b>, el enunciado y las opciones. La respuesta correcta se marca con "
+             "el circulito de la izquierda. Los botones ², π, √, ≤... escriben esos símbolos.",
+             "<b>Imagen:</b> copie una imagen o tome una captura (Windows + Shift + S) y pulse "
+             "<b>Ctrl+V</b>. También puede elegir un archivo.",
+             "<b>Fórmula:</b> con «∑ Fórmula…» se escribe, por ejemplo, <i>x^{2} + \\frac{3}{4}</i> "
+             "y el programa la dibuja como en un libro.",
+             "<b>Texto compartido</b> (una lectura, tabla o gráfica para varias preguntas): créelo "
+             "en «Textos compartidos…» y elíjalo en cada pregunta que lo usa. Esas preguntas deben "
+             "ir seguidas.",
+             "<b>Fija:</b> márquela si las opciones no se deben cambiar de orden (por ejemplo si "
+             "una dice «Todas las anteriores»).",
+             "<b>A la derecha</b>, la pregunta tal como saldrá en el cuadernillo.",
+             "Todo se <b>guarda solo</b> (abajo dice «Guardado»)."]),
+      captura("16_editor.png", pie="Editor de preguntas: lista, formulario y vista previa."),
+      p("3.2 Traer las preguntas de un Word", H2),
+      p("Si ya tiene las preguntas en Word, pulse <b>«Traer de un Word…»</b>. El documento debe "
+        "seguir este formato (el botón «Word de ejemplo» crea uno):"),
+      lista(["El nombre de la prueba en una línea sola (MATEMÁTICAS) antes de sus preguntas.",
+             "Cada pregunta con su número y un punto («12.»); cada opción con su letra («A.»). "
+             "También sirven las listas numeradas automáticas de Word.",
+             "La correcta marcada con un asterisco (*C. ...) o con una línea «Respuesta: C».",
+             "Para un texto compartido: «RESPONDA LAS PREGUNTAS 25 A 28 DE ACUERDO CON LA "
+             "SIGUIENTE INFORMACIÓN» y después el texto.",
+             "Las imágenes pegadas en el enunciado o en el texto también se traen. Las tablas de "
+             "Word no: péguelas como imagen."]),
+      p("El programa le dice cuántas preguntas encontró y qué no entendió, y le pregunta si "
+        "reemplaza las que ya tenían texto. Después revíselas en el editor."),
+      recuadro("<b>¿Prefiere Excel?</b> Todo queda en <b>banco_preguntas.xlsx</b> (carpeta "
+               "«cuadernillos» del examen), que también se puede llenar directamente: una fila por "
+               "pregunta, imágenes pegadas sobre la celda «Imagen» y los textos compartidos en la "
+               "hoja «Contextos». Luego pulse «Revisar». No use el editor y Excel al mismo tiempo."),
+      p("3.3 Generar los cuadernillos", H2),
+      lista(["Elija qué cambia en las formas B, C...: el <b>orden de las preguntas</b> (dentro "
+             "de cada prueba; las de un mismo texto se mueven juntas) y/o el <b>orden de las "
+             "opciones</b>. La forma A queda en el orden del Excel.",
+             "Escriba el tiempo para responder (opcional) y elija si cada prueba empieza en una "
+             "página nueva (desmárquelo para ahorrar papel).",
+             "Pulse <b>«Generar cuadernillos»</b>. Quedan <b>cuadernillo_A.pdf</b>, "
+             "<b>cuadernillo_B.pdf</b>... en la carpeta «cuadernillos» del examen, y la "
+             "<b>clave de cada forma ya queda escrita en «Resultados»</b>."]),
+      captura("14_cuadernillos.png", pie="Pestaña «Cuadernillos»: banco de preguntas a la "
+                                         "izquierda y vista del cuadernillo a la derecha."),
+      captura("15_cuadernillo.png", 12, "Una página del cuadernillo: texto compartido y "
+                                        "preguntas a dos columnas."),
+      recuadro("<b>Si corrige el Excel después de imprimir</b> (por ejemplo, un error de "
+               "digitación), al generar de nuevo el programa pregunta si conserva el MISMO orden: "
+               "diga que sí y los cuadernillos impresos siguen sirviendo. Un orden nuevo solo "
+               "conviene antes de imprimir.", AMARILLO),
+      Spacer(1, 0.3 * cm),
+      p("3.4 Resultados con las formas juntas", H2),
+      p("Como el programa sabe que la pregunta 5 de la forma B es, por ejemplo, la 12 de la "
+        "forma A, en «Resultados» → «Preguntas» puede elegir <b>«Ver la forma: Todas»</b>: cada "
+        "pregunta aparece una sola vez, con los estudiantes de todas las formas (los números son "
+        "los de la forma A). Así el análisis es más confiable y el aviso de «posible error en la "
+        "clave» funciona aunque haya pocos estudiantes por forma. Si anula una pregunta en esa "
+        "vista, se anula en todas las formas."),
+      PageBreak()]
+
+# --- 4. Día del examen y escaneo ---
+h += [p("4. El día del examen", H1),
       lista(["Entregue a cada estudiante su hoja (y, si usa formas, el cuadernillo de la misma "
              "forma que dice su hoja).",
              "Pida <b>lápiz No. 2 o lapicero negro</b> y que <b>rellenen completamente</b> un solo "
              "círculo por pregunta. Una X o un chulo no se lee bien.",
              "Si se equivocan, que borren muy bien. Sin corrector.",
              "Que no doblen la hoja ni escriban sobre las marcas negras de las esquinas."]),
-      p("3.1 Escanear", H2),
+      p("4.1 Escanear", H2),
       tabla([["", "Cómo escanear"],
              ["Formato", "Todas las hojas en un solo PDF (o en varios). Blanco y negro o escala "
                          "de grises, 200 a 300 ppp."],
@@ -214,8 +288,8 @@ h += [p("3. El día del examen", H1),
                "o «Escanear a USB».", AMARILLO),
       Spacer(1, 0.6 * cm),
 
-      p("4. Leer las hojas", H1),
-      lista(["En la pestaña <b>«2. Leer hojas»</b> elija el examen arriba.",
+      p("5. Leer las hojas", H1),
+      lista(["En la pestaña <b>«3. Leer hojas»</b> elija el examen arriba.",
              "Pulse <b>«Agregar PDF»</b> (o «Agregar carpeta») y elija el PDF del escáner. Puede "
              "agregar varios.",
              "Pulse <b>«Leer hojas»</b> y espere: la barra muestra el avance (unos segundos por hoja).",
@@ -227,7 +301,7 @@ h += [p("3. El día del examen", H1),
             numerada=True),
       captura("03_leer.png", pie="Pestaña «Leer hojas»: hojas leídas, observaciones de la hoja elegida e imagen con las "
                                  "marcas detectadas."),
-      p("4.1 ¿Qué significan los colores?", H2),
+      p("5.1 ¿Qué significan los colores?", H2),
       tabla([["Estado", "Qué hacer"],
              ["Lista", "Nada: se leyó bien."],
              ["Revisar (amarillo)", "Algo merece una mirada: doble marca, documento incompleto, "
@@ -236,7 +310,7 @@ h += [p("3. El día del examen", H1),
                                    "esquina cortada), o es una hoja de OTRO examen. Escanéela de "
                                    "nuevo, léala en el examen correcto o corríjala a mano."]],
             [4, 12.5], {2: AMARILLO, 3: ROJO_CLARO}),
-      p("4.2 Revisión rápida (recomendado)", H2),
+      p("5.2 Revisión rápida (recomendado)", H2),
       p("El botón verde <b>«Revisión rápida (N)»</b> muestra, uno por uno, los puntos dudosos de "
         "todas las hojas: preguntas con doble marca, forma sin marcar y documentos incompletos o "
         "que no están en la lista. Cada uno aparece <b>ampliado</b>, con un recuadro naranja; "
@@ -249,12 +323,12 @@ h += [p("3. El día del examen", H1),
              "la hoja queda en verde.",
              "«Abrir la hoja completa» lleva a la ventana de corrección de siempre."]),
       captura("12_revision.png", 12, "Revisión rápida: la pregunta dudosa, ampliada."),
-      p("4.3 Corregir una hoja a mano", H2),
+      p("5.3 Corregir una hoja a mano", H2),
       p("Doble clic sobre la hoja: a la izquierda verá la imagen y a la derecha el documento, la "
         "forma y cada respuesta. Las preguntas con doble marca salen en amarillo y las que están en "
         "blanco, en gris. Corrija y pulse <b>«Guardar corrección»</b>."),
       captura("04_corregir.png", 15, "Ventana de corrección."),
-      p("4.4 Otros botones", H2),
+      p("5.4 Otros botones", H2),
       lista(["<b>Eliminar:</b> quita las hojas seleccionadas (con Ctrl o Shift se eligen varias).",
              "<b>Borrar todas:</b> empieza de cero en ese examen. Los PDF originales no se borran.",
              "Si vuelve a leer la hoja de un estudiante, la nueva <b>reemplaza</b> a la anterior: "
@@ -263,8 +337,8 @@ h += [p("3. El día del examen", H1),
              "Ideal para aprender a usarlo o mostrárselo a otro docente."]),
       PageBreak()]
 
-# --- 5. Resultados ---
-h += [p("5. Ver los resultados", H1),
+# --- 6. Resultados ---
+h += [p("6. Ver los resultados", H1),
       lista(["<b>Clave de respuestas:</b> escriba una línea por materia con las respuestas correctas "
              "seguidas, por ejemplo <i>ABDCA BBCDA</i> (los espacios no importan). Al lado verá si "
              "está completa (25/25). Si el examen tiene formas, hay un bloque para cada forma.",
@@ -273,7 +347,7 @@ h += [p("5. Ver los resultados", H1),
              "<b>Lista de estudiantes</b> (opcional si ya la cargó al crear la hoja): para ver los "
              "nombres y saber quién no entregó.",
              "<b>Escala de notas:</b> por defecto de 1,0 a 5,0 y aprueba con 3,0. Ahí mismo está "
-             "la casilla del <b>puntaje tipo Saber 11</b> (ver 5.1)."], numerada=True),
+             "la casilla del <b>puntaje tipo Saber 11</b> (ver 6.1)."], numerada=True),
       captura("05_resultados.png", pie="Pestaña «Resultados»: clave a la izquierda; tablero a la "
                                        "derecha. Todo se recalcula solo."),
       p("En el tablero verá los cuadros de estudiantes, nota promedio, cuántos aprueban, "
@@ -295,10 +369,10 @@ h += [p("5. Ver los resultados", H1),
                "los MEJORES estudiantes marcó la misma otra opción, lo más probable es que la clave "
                "esté mal. El programa lo avisa en rojo arriba y en «Alertas». Revise esa pregunta "
                "en su cuadernillo: si la clave estaba mal, corríjala y las notas se recalculan solas. "
-               "Si la clave estaba bien pero la pregunta tenía un problema, anúlela (ver 5.2).",
+               "Si la clave estaba bien pero la pregunta tenía un problema, anúlela (ver 6.2).",
                AMARILLO),
       Spacer(1, 0.3 * cm),
-      p("5.1 Puntaje tipo Saber 11 (0 a 500)", H2),
+      p("6.1 Puntaje tipo Saber 11 (0 a 500)", H2),
       p("En los simulacros, además de la nota, el programa calcula un puntaje global de 0 a 500 "
         "como el del ICFES: cada materia da un puntaje de 0 a 100 y el global es el promedio "
         "ponderado multiplicado por 5. Lectura crítica, Matemáticas, Sociales y Ciencias pesan 3 "
@@ -314,7 +388,7 @@ h += [p("5. Ver los resultados", H1),
                "así que el puntaje real puede ser distinto. Sirve para ver el avance entre "
                "simulacros, no para predecir el resultado exacto."),
       Spacer(1, 0.3 * cm),
-      p("5.2 Anular una pregunta", H2),
+      p("6.2 Anular una pregunta", H2),
       p("Si una pregunta estaba mal redactada, tenía dos respuestas válidas o era de un tema que "
         "no se alcanzó a ver, se puede anular. En la pestaña <b>«Preguntas»</b> elíjala en la "
         "tabla y pulse <b>«Anular pregunta…»</b>. Hay dos opciones:"),
@@ -326,21 +400,34 @@ h += [p("5. Ver los resultados", H1),
       p("La pregunta anulada se ve en gris en la tabla y en el gráfico. Para deshacerlo, elíjala "
         "y pulse <b>«Quitar anulación»</b>. Con formas, se anula la pregunta de la forma que se "
         "está viendo."),
-      p("5.3 Exportar a Excel", H2),
+      p("6.3 Exportar a Excel", H2),
       p("El botón <b>«Exportar a Excel»</b> crea <b>resultados.xlsx</b> en la carpeta del examen, con "
         "las hojas Resumen (con gráfico), Estudiantes, Materias, Preguntas, Respuestas (verde bien, "
         "rojo mal) y Alertas. Si Excel muestra un error al exportar, cierre el archivo y vuelva a "
         "intentar."),
-      p("5.4 Boletines para los estudiantes", H2),
-      p("El botón <b>«Boletines (PDF)»</b> crea <b>boletines.pdf</b>: una página por estudiante "
+      p("6.4 Boletines para los estudiantes", H2),
+      p("El botón <b>«Boletines»</b> crea <b>boletines.pdf</b>: una página por estudiante "
         "con su nota, su porcentaje, su puesto, el resultado de cada materia comparado con el "
         "promedio del curso y las <b>preguntas para repasar</b> (lo que marcó y la respuesta "
         "correcta). Se puede imprimir y entregar, o enviar al acudiente."),
+      p("6.5 Informe para coordinación", H2),
+      p("El botón <b>«Informe»</b> crea <b>informe_coordinacion.pdf</b>, de dos páginas, para "
+        "coordinación o el consejo académico:"),
+      lista(["<b>Página 1:</b> cifras principales, <b>niveles de desempeño</b> (Superior, Alto, "
+             "Básico y Bajo), cuántos estudiantes hay en cada rango de nota y los resultados por "
+             "materia.",
+             "<b>Página 2:</b> comparación entre cursos (si la lista trae 11-01, 11-02...), las 10 "
+             "preguntas más difíciles con la opción errada que más eligieron, las preguntas para "
+             "revisar en el cuadernillo, las alertas y un espacio para observaciones y firmas."]),
+      captura("13_informe.png", 9.5, "Primera página del informe para coordinación."),
+      recuadro("Los niveles usan los rangos más comunes en la escala de 1,0 a 5,0 (Bajo: menos "
+               "de la nota de aprobación; Básico: hasta 3,9; Alto: 4,0 a 4,5; Superior: 4,6 a "
+               "5,0). Si el SIEE de su colegio usa otros rangos, téngalo en cuenta."),
       PageBreak()]
 
-# --- 6. Seguimiento ---
-h += [p("6. Seguimiento entre exámenes", H1),
-      p("En la pestaña <b>«4. Seguimiento»</b> elija el grado y marque los exámenes que quiere "
+# --- 7. Seguimiento ---
+h += [p("7. Seguimiento entre exámenes", H1),
+      p("En la pestaña <b>«5. Seguimiento»</b> elija el grado y marque los exámenes que quiere "
         "comparar (por ejemplo, los tres simulacros del año). Solo aparecen los que ya tienen hojas "
         "leídas y clave. Los estudiantes se reconocen por su documento."),
       captura("09_seguimiento.png", pie="Promedio del curso en cada examen: la línea negra es el "
@@ -351,8 +438,8 @@ h += [p("6. Seguimiento entre exámenes", H1),
       p("El botón «Exportar a Excel» guarda el seguimiento en la carpeta «salidas»."),
       PageBreak()]
 
-# --- 7. Compartir ---
-h += [p("7. Compartir un examen con otro computador", H1),
+# --- 8. Compartir ---
+h += [p("8. Compartir un examen con otro computador", H1),
       p("Con el menú <b>«Compartir examen»</b> (arriba a la derecha) un examen completo se "
         "guarda en un solo archivo <b>.zip</b>. Sirve para pasarlo a otro docente, llevarlo en una "
         "USB a la sala de sistemas o guardar una copia de seguridad."),
@@ -366,8 +453,8 @@ h += [p("7. Compartir un examen con otro computador", H1),
                "Si solo va a <b>imprimir</b>, basta con el diseño."),
       Spacer(1, 0.6 * cm)]
 
-# --- 8. Preguntas frecuentes ---
-h += [p("8. Problemas frecuentes", H1),
+# --- 9. Preguntas frecuentes ---
+h += [p("9. Problemas frecuentes", H1),
       tabla([["Problema", "Solución"],
              ["Una hoja sale «No se leyó».",
               "Revise que se vean las 4 marcas negras completas y que la hoja haya entrado derecha "

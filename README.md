@@ -48,15 +48,18 @@ colegio: calificar simulacros tipo Saber 11 sin pasar horas revisando hojas a ma
 | Módulo | Qué hace |
 |---|---|
 | **1 · Crear hoja** | Diseña la hoja: colegio, logo, materias, número de preguntas y opciones (A–D, A–E…). Vista previa en vivo. Genera el PDF para imprimir y la plantilla de lectura, **siempre sincronizados**. |
-| **2 · Leer hojas** | Lee los PDF del escáner (con [OMRChecker](https://github.com/Udayraj123/OMRChecker)). Muestra lo que detectó en cada hoja y permite corregir a mano. |
-| **3 · Resultados** | Clave de respuestas, notas en la escala que se elija (por defecto 1,0–5,0), puntaje tipo Saber 11 (0–500), tablero con gráficos, análisis por pregunta, anulación de preguntas, alertas, Excel y boletines en PDF. |
-| **4 · Seguimiento** | Compara varios exámenes (por ejemplo, los simulacros del año) para ver si el curso y cada estudiante mejoran. |
+| **2 · Cuadernillos** | Las preguntas se escriben una vez en el **editor de preguntas** del programa (con vista previa, imágenes con Ctrl+V y fórmulas), se traen de un **Word** o se llenan en Excel y el programa arma un **cuadernillo por forma** en PDF, estilo pruebas Saber (dos columnas, «RESPONDA LAS PREGUNTAS… DE ACUERDO CON LA SIGUIENTE INFORMACIÓN»), cambiando el orden de preguntas y/u opciones. La clave de cada forma queda lista. |
+| **3 · Leer hojas** | Lee los PDF del escáner (con [OMRChecker](https://github.com/Udayraj123/OMRChecker)). Muestra lo que detectó en cada hoja y permite corregir a mano. |
+| **4 · Resultados** | Clave de respuestas, notas en la escala que se elija (por defecto 1,0–5,0), puntaje tipo Saber 11 (0–500), tablero con gráficos, análisis por pregunta, anulación de preguntas, alertas, Excel y boletines en PDF. |
+| **5 · Seguimiento** | Compara varios exámenes (por ejemplo, los simulacros del año) para ver si el curso y cada estudiante mejoran. |
 
 Además:
 
 - **Hojas con nombre:** se importa la lista del curso (Excel o CSV, por ejemplo la del SIMAT) y
   se imprime una hoja por estudiante con su nombre y su documento **ya marcados**.
-- **Formas A/B/C/D (opcional):** una clave por forma para cuadernillos con las opciones en otro orden.
+- **Formas A/B/C/D (opcional):** una clave por forma. Si los cuadernillos los arma el programa,
+  la clave de cada forma se calcula sola y en «Resultados» se pueden ver **las formas juntas**
+  (cada pregunta una vez, con todos los estudiantes).
 - **Código del examen:** cada examen imprime un código en la franja inferior; si se cuela una hoja
   de otro examen, el lector la detecta.
 - **Exámenes de varias hojas:** si las preguntas no caben, se reparten solas en 2, 3 o 4 hojas que
@@ -73,6 +76,9 @@ Además:
 - **Anular preguntas:** una pregunta mal redactada o con dos respuestas válidas se puede dar por
   buena a todos o sacar del cálculo; las notas se recalculan solas y se puede deshacer.
 - **Boletines individuales** en PDF, una página por estudiante.
+- **Informe para coordinación** (PDF de 2 páginas): niveles de desempeño (Superior, Alto, Básico,
+  Bajo), distribución de notas, resultados por materia, comparación entre cursos, las 10 preguntas
+  más difíciles con la opción errada más elegida, preguntas para revisar y espacio para firmas.
 - **Compartir examen:** exporta o importa un examen completo en un `.zip` (otro docente, otra sede, copia de seguridad).
 - **Hojas de práctica:** genera un curso inventado ya diligenciado para aprender a usar el programa sin imprimir nada.
 - **Manual para docentes** en PDF ([`Manual CalificaTAP.pdf`](Manual%20CalificaTAP.pdf)).
@@ -113,6 +119,8 @@ Se hace **una sola vez, con internet**. Después el programa funciona sin conexi
 1. **Crear hoja:** llene los datos del colegio y del examen, agregue las materias (o use
    «Plantilla Saber 11») y pulse **Generar hoja de respuestas**.
    Imprima en **«Tamaño real» / 100 %**, nunca «Ajustar a la página».
+   *Opcional:* en **Cuadernillos**, pulse **✏ Escribir las preguntas** (o tráigalas de un Word)
+   y luego **Generar cuadernillos** (un PDF por forma; la clave queda lista).
 2. **Día del examen:** lápiz No. 2 o lapicero negro, rellenando completamente un solo círculo.
 3. **Leer hojas:** escanee todas las hojas en un solo PDF (blanco y negro o grises,
    200–300 ppp), agréguelo y pulse **Leer hojas**. Verde = bien, amarillo = revisar, rojo = no se leyó.
@@ -120,7 +128,7 @@ Se hace **una sola vez, con internet**. Después el programa funciona sin conexi
    quedaron en blanco. Con **⚡ Revisión rápida** se resuelven una por una, ampliadas.
    Doble clic sobre una hoja para corregirla completa.
 4. **Resultados:** escriba la clave (una línea por materia) o tómela de una hoja leída, importe
-   la lista del curso y revise notas, gráficos y alertas. Exporte a Excel o genere los boletines.
+   la lista del curso y revise notas, gráficos y alertas. Exporte a Excel, genere los boletines o el informe para coordinación.
 
 Todo lo que produce el programa queda en `salidas/<nombre_del_examen>/`.
 El paso a paso con imágenes está en el [manual](Manual%20CalificaTAP.pdf).
@@ -205,6 +213,13 @@ CalificaTAP/
 ├── calificatap/
 │   ├── examenes.py              ← encuentra los exámenes generados y sus archivos
 │   ├── compartir.py             ← exportar / importar un examen en .zip
+│   ├── cuadernillos/            ← Módulo 0: banco de preguntas → cuadernillos por forma
+│   │   ├── banco.py             ←   plantilla de Excel y lectura (con imágenes pegadas)
+│   │   ├── formas.py            ←   baraja preguntas/opciones; formas.json; claves
+│   │   ├── pdf.py               ←   dibuja el cuadernillo (reportlab, dos columnas) y la vista previa
+│   │   ├── word.py              ←   importa preguntas desde Word (.docx)
+│   │   ├── formulas.py          ←   fórmula «a lo LaTeX» → imagen (matplotlib, sin internet)
+│   │   └── generar.py           ←   une todo
 │   ├── generador/               ← Módulo 1
 │   │   ├── diseno.py            ←   medidas (burbujas, márgenes, franja del código…)
 │   │   ├── configuracion.py     ←   lee y valida el JSON
@@ -224,15 +239,17 @@ CalificaTAP/
 │   │   ├── calificar.py         ←   notas, materias, preguntas, alertas
 │   │   ├── seguimiento.py       ←   compara varios exámenes
 │   │   ├── boletines.py         ←   boletín individual en PDF
+│   │   ├── informe.py           ←   informe para coordinación (PDF de 2 páginas)
 │   │   └── excel.py             ←   resultados.xlsx y seguimiento.xlsx
 │   └── interfaz/                ← ventanas (tkinter)
 │       ├── app.py               ←   ventana principal y pestañas
-│       ├── pestana_generador.py, pestana_lector.py,
+│       ├── pestana_generador.py, pestana_cuadernillos.py, pestana_lector.py,
 │       │   pestana_resultados.py, pestana_seguimiento.py
 │       ├── vista_previa.py      ←   dibuja la hoja en pantalla
 │       ├── ventana_importar.py  ←   importar la lista de estudiantes
 │       ├── ventana_compartir.py ←   exportar / importar examen
 │       ├── ventana_revision.py  ←   revisión rápida de las hojas amarillas
+│       ├── editor_preguntas.py  ←   editor de preguntas del cuadernillo
 │       ├── estilos.py, utilidades.py
 ├── docs/
 │   ├── crear_manual.py          ← arma «Manual CalificaTAP.pdf»
@@ -263,7 +280,7 @@ o `python pruebas/crear_hojas_de_prueba.py`.
 - [x] Resultados, Excel, seguimiento, boletines
 - [x] Hojas con nombre, formas, código del examen, varias hojas
 - [ ] Instalador `.exe` (sin necesidad de instalar Python)
-- [ ] Barajar opciones / generar cuadernillos por forma
+- [x] Cuadernillos por forma (banco en Excel, estilo Saber) con clave automática
 - [ ] Pruebas unitarias con pytest
 
 ## Privacidad

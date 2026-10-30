@@ -137,6 +137,11 @@ class Examen:
         return datetime.fromtimestamp((self.carpeta / "template.json").stat().st_mtime).isoformat()
 
     @property
+    def carpeta_cuadernillos(self) -> Path:
+        """Banco de preguntas, cuadernillos en PDF y formas.json (Módulo 0)."""
+        return self.carpeta / "cuadernillos"
+
+    @property
     def archivo_excel(self) -> Path:
         return self.carpeta / "resultados.xlsx"
 

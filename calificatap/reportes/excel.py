@@ -62,6 +62,11 @@ def exportar_excel(r: Resultados, ruta: str | Path) -> Path:
         "aprueban": "Estudiantes que aprueban"})
 
     preguntas = r.por_pregunta.drop(columns=["etiqueta"])
+    # Las filas de las formas juntas («*») primero, con el nombre «Todas (num. forma A)»
+    if r.formas_juntas:
+        preguntas = pd.concat([preguntas[preguntas["forma"] == "*"],
+                               preguntas[preguntas["forma"] != "*"]])
+        preguntas["forma"] = preguntas["forma"].replace("*", "Todas (num. forma A)")
     if not e.letras_formas:
         preguntas = preguntas.drop(columns=["forma"])
     preguntas = preguntas.rename(columns={"forma": "Forma", "respondieron": "Estudiantes",

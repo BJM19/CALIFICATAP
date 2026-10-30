@@ -25,6 +25,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
+from ..cuadernillos.formas import cargar_mapa
 from ..lector.hojas import ERROR, cargar_hojas, guardar_hojas
 from ..reportes.calificar import (Escala, calificar, cargar_escala, guardar_escala,
                                   pesos_saber, usa_puntaje_saber)
@@ -66,8 +67,10 @@ class PestanaResultados(ttk.Frame):
         self.btn_excel = ttk.Button(arriba, text="📊 Exportar a Excel", style="Primario.TButton",
                                     command=self.exportar)
         self.btn_excel.pack(side="right")
-        ttk.Button(arriba, text="📄 Boletines (PDF)", command=self.boletines).pack(
+        ttk.Button(arriba, text="📄 Boletines", command=self.boletines).pack(
             side="right", padx=8)
+        ttk.Button(arriba, text="📋 Informe", command=self.informe).pack(
+            side="right")
 
         division = ttk.PanedWindow(self, orient="horizontal")
         division.pack(fill="both", expand=True)
@@ -194,7 +197,7 @@ class PestanaResultados(ttk.Frame):
         self.fila_forma = ttk.Frame(pagina)
         ttk.Label(self.fila_forma, text="Ver la forma:").pack(side="left")
         self.var_forma_preg = tk.StringVar(value="A")
-        combo = ttk.Combobox(self.fila_forma, textvariable=self.var_forma_preg, width=4,
+        combo = ttk.Combobox(self.fila_forma, textvariable=self.var_forma_preg, width=8,
                              state="readonly")
         combo.pack(side="left", padx=6)
         combo.bind("<<ComboboxSelected>>", lambda e: self.resultados and self._mostrar_preguntas(self.resultados))
@@ -321,7 +324,7 @@ class PestanaResultados(ttk.Frame):
         examen = self.selector.examen
         hojas = [h for h in cargar_hojas(examen) if h.estado != ERROR] if examen else []
         if not hojas:
-            messagebox.showinfo("No hay hojas", "Primero lea las hojas en la pestaña 2.\n\n"
+            messagebox.showinfo("No hay hojas", "Primero lea las hojas en la pestaña 3.\n\n"
                                 "Truco: llene una hoja con las respuestas correctas, "
                                 "léala junto con las demás y elíjala aquí.", parent=self)
             return
@@ -436,7 +439,7 @@ class PestanaResultados(ttk.Frame):
         claves = cargar_clave(examen)
         hojas = cargar_hojas(examen)
         if not hojas:
-            self._aviso("Aún no hay hojas leídas para este examen. Léalas en la pestaña 2.")
+            self._aviso("Aún no hay hojas leídas para este examen. Léalas en la pestaña 3.")
             self._limpiar()
             return
         if not any(claves.values()):
@@ -464,7 +467,7 @@ class PestanaResultados(ttk.Frame):
         sospechas = r.por_pregunta[r.por_pregunta["sospecha_clave"] != ""]
         if not sospechas.empty:
             lista = ", ".join(
-                f"{p['pregunta']}{' (' + p['forma'] + ')' if p['forma'] else ''}"
+                f"{p['pregunta']}{' (' + p['forma'] + ')' if p['forma'] not in ('', '*') else ''}"
                 for _, p in sospechas.head(5).iterrows())
             self._aviso(f"⚠ Posible error en la clave de la(s) pregunta(s) {lista}: la mayoría "
                         "de los mejores estudiantes marcó otra opción. Revísela(s): si la "
@@ -500,9 +503,10 @@ class PestanaResultados(ttk.Frame):
             self.t_puntaje.poner(f"{puntajes.mean():.0f}",
                                  f"de {puntajes.min():.0f} a {puntajes.max():.0f}")
         # La más difícil, sin contar las anuladas
-        vigentes = r.por_pregunta[r.por_pregunta["anulada"] == ""]
-        peor = (vigentes if not vigentes.empty else r.por_pregunta).sort_values("acierto").iloc[0]
-        forma = f" ({peor['forma']})" if peor["forma"] else ""
+        analisis = r.preguntas_analisis
+        vigentes = analisis[analisis["anulada"] == ""]
+        peor = (vigentes if not vigentes.empty else analisis).sort_values("acierto").iloc[0]
+        forma = f" ({peor['forma']})" if peor["forma"] not in ("", "*") else ""
         codigo = {m.nombre: m.codigo for m in r.examen.materias}.get(peor["materia"], "")
         self.t_dificil.poner(f"N.º {peor['pregunta']}{forma}",
                              f"{codigo} · {peor['acierto']:.0f} % acertó")
@@ -541,9 +545,12 @@ class PestanaResultados(ttk.Frame):
     def _preparar_filtro_formas(self, examen) -> None:
         """Muestra "Ver la forma: [A]" solo si el examen tiene formas."""
         if examen.letras_formas:
-            self.combo_forma_preg.configure(values=list(examen.letras_formas))
-            if self.var_forma_preg.get() not in examen.letras_formas:
-                self.var_forma_preg.set("A")
+            # Con cuadernillos armados por CalificaTAP se pueden ver las formas juntas
+            valores = list(examen.letras_formas)
+            if cargar_mapa(examen):
+                valores.insert(0, "Todas")
+            self.combo_forma_preg.configure(values=valores)
+            self.var_forma_preg.set(valores[0])      # «Todas» si se puede
             self.fila_forma.pack(anchor="w", pady=(0, 4), before=self.lienzo_preguntas.get_tk_widget())
         else:
             self.fila_forma.pack_forget()
@@ -552,7 +559,8 @@ class PestanaResultados(ttk.Frame):
         """Las filas de 'por_pregunta' de la forma elegida (o todas si no hay formas)."""
         p = r.por_pregunta
         if r.examen.letras_formas:
-            p = p[p["forma"] == self.var_forma_preg.get()]
+            elegida = self.var_forma_preg.get()
+            p = p[p["forma"] == ("*" if elegida == "Todas" else elegida)]
         return p
 
     def _mostrar_preguntas(self, r) -> None:
@@ -762,13 +770,25 @@ class PestanaResultados(ttk.Frame):
         fila = p[(p["etiqueta"] == etiqueta) & ((p["forma"] == forma) | (p["forma"] == ""))]
         return forma, etiqueta, fila.iloc[0]
 
+    def _anular_en_formas(self, forma: str, etiqueta: str, modo: str | None) -> None:
+        """Anula (o restaura) una pregunta. Con «Todas», en todas las formas donde aparece."""
+        examen = self.selector.examen
+        if forma != "*":
+            anular_pregunta(examen, forma, etiqueta, modo)
+            return
+        for letra, mapa_forma in cargar_mapa(examen).get("formas", {}).items():
+            for e, info in mapa_forma.items():
+                if info["original"] == etiqueta:
+                    anular_pregunta(examen, letra, e, modo)
+
     def anular(self) -> None:
         elegida = self._pregunta_elegida()
         if not elegida:
             return
         forma, etiqueta, fila = elegida
         examen = self.selector.examen
-        texto_forma = f" de la forma {forma}" if examen.letras_formas else ""
+        texto_forma = (" (en todas las formas)" if forma == "*" else
+                       f" de la forma {forma}" if examen.letras_formas else "")
 
         ventana = tk.Toplevel(self)
         ventana.title("Anular pregunta")
@@ -792,7 +812,7 @@ class PestanaResultados(ttk.Frame):
                        "anulación».").pack(anchor="w", pady=(6, 0))
 
         def aceptar():
-            anular_pregunta(examen, forma, etiqueta, var_modo.get())
+            self._anular_en_formas(forma, etiqueta, var_modo.get())
             ventana.destroy()
             self.recalcular()
             if self.tabla_preg.exists(f"{forma}|{etiqueta}"):
@@ -814,7 +834,7 @@ class PestanaResultados(ttk.Frame):
         if not fila["anulada"]:
             messagebox.showinfo("Quitar anulación", "Esa pregunta no está anulada.", parent=self)
             return
-        anular_pregunta(self.selector.examen, forma, etiqueta, None)
+        self._anular_en_formas(forma, etiqueta, None)
         self.recalcular()
 
     def boletines(self) -> None:
@@ -839,6 +859,30 @@ class PestanaResultados(ttk.Frame):
         if messagebox.askyesno("Boletines listos",
                                f"Se creó boletines.pdf con {n} boletines (uno por página), en la "
                                "carpeta del examen.\n\n¿Desea abrirlo ahora?", parent=self):
+            abrir_con_el_sistema(ruta)
+
+    def informe(self) -> None:
+        """Informe de dos páginas del examen, para coordinación o consejo académico."""
+        if not self.resultados or not self.resultados.hay_datos:
+            messagebox.showinfo("Sin resultados", "Todavía no hay resultados para el informe.",
+                                parent=self)
+            return
+        from ..reportes.informe import crear_informe
+        ruta = self.resultados.examen.carpeta / "informe_coordinacion.pdf"
+        self.winfo_toplevel().configure(cursor="watch")
+        self.update_idletasks()
+        try:
+            crear_informe(self.resultados, ruta)
+        except PermissionError:
+            messagebox.showerror("Archivo abierto",
+                                 "Cierre informe_coordinacion.pdf y vuelva a intentar.", parent=self)
+            return
+        finally:
+            self.winfo_toplevel().configure(cursor="")
+        if messagebox.askyesno("Informe listo",
+                               "Se creó informe_coordinacion.pdf en la carpeta del examen: "
+                               "niveles de desempeño, materias, cursos y preguntas más "
+                               "difíciles.\n\n¿Desea abrirlo ahora?", parent=self):
             abrir_con_el_sistema(ruta)
 
     def exportar(self) -> None:

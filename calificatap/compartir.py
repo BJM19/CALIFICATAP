@@ -52,6 +52,10 @@ def _incluir(relativa: PurePosixPath, clave_y_lista: bool, resultados: bool) -> 
         return True
     if len(partes) == 1 and nombre in CLAVE_Y_LISTA:
         return clave_y_lista
+    if partes[0] == "cuadernillos":
+        # Los cuadernillos en PDF siempre; el banco (tiene las respuestas correctas)
+        # y su mapa, solo si se comparte también la clave
+        return nombre.endswith(".pdf") or clave_y_lista
     # Lo leído (lecturas/...) y los reportes (resultados.xlsx, boletines.pdf)
     return resultados
 
