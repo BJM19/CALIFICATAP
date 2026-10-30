@@ -152,8 +152,14 @@ def crear_boletines(r: Resultados, ruta: str | Path, documentos: list[str] | Non
         # --- Tarjetas: nota, %, puesto, aprueba ---
         aprueba = bool(f["aprobado"])
         color_nota = VERDE if aprueba else ROJO
+        if r.con_puntaje and not pd.isna(f["puntaje"]):
+            # Simulacro tipo Saber 11: el puntaje de 0 a 500 en lugar del %
+            segunda = _tarjeta(f"{int(f['puntaje'])}",
+                               "Puntaje tipo Saber (de 500)")
+        else:
+            segunda = _tarjeta(f"{f['porcentaje']:.0f} %", f"Aciertos: {int(f['aciertos'])}")
         tarjetas = Table([[_tarjeta(f"{f['nota']:.1f}", f"Nota (de {escala.minima:.1f} a {escala.maxima:.1f})", color_nota),
-                           _tarjeta(f"{f['porcentaje']:.0f} %", f"Aciertos: {int(f['aciertos'])}"),
+                           segunda,
                            _tarjeta(f"{int(f['puesto'])} de {total}", "Puesto en el curso"),
                            _tarjeta("Sí" if aprueba else "No", f"Aprueba (desde {escala.aprobacion:.1f})",
                                     color_nota)]],
@@ -171,10 +177,12 @@ def crear_boletines(r: Resultados, ruta: str | Path, documentos: list[str] | Non
         datos_grafico = []
         for m in materias:
             pct = f[m.nombre]
-            correctas = r.aciertos.loc[f["documento"], m.etiquetas()].sum() \
-                if f["documento"] in r.aciertos.index else 0
+            de_la_materia = (r.aciertos.loc[f["documento"], m.etiquetas()]
+                             if f["documento"] in r.aciertos.index else pd.Series(dtype=float))
+            correctas = de_la_materia.sum()
+            cuentan = int(de_la_materia.notna().sum()) or m.preguntas   # sin las anuladas que no cuentan
             prom = promedios.get(m.nombre, float("nan"))
-            filas.append([m.nombre, f"{int(correctas)} de {m.preguntas}",
+            filas.append([m.nombre, f"{int(correctas)} de {cuentan}",
                           "—" if pd.isna(pct) else f"{pct:.0f} %",
                           "—" if pd.isna(pct) else f"{escala.nota(pct / 100):.1f}",
                           "—" if pd.isna(prom) else f"{prom:.0f} %"])

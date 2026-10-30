@@ -211,7 +211,7 @@ class Tarjeta(tk.Frame):
 
     def __init__(self, padre, titulo: str):
         super().__init__(padre, bg=estilos.FONDO_PANEL, highlightthickness=1,
-                         highlightbackground=estilos.BORDE, padx=14, pady=8)
+                         highlightbackground=estilos.BORDE, padx=10, pady=8)
         tk.Label(self, text=titulo, bg=estilos.FONDO_PANEL, fg=estilos.TEXTO_SUAVE,
                  font=(estilos.FAMILIA, 9)).pack(anchor="w")
         self.lbl_valor = tk.Label(self, text="—", bg=estilos.FONDO_PANEL, fg=estilos.TEXTO,

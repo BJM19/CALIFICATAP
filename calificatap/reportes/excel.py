@@ -22,7 +22,7 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .calificar import Resultados
+from .calificar import Resultados, pesos_saber
 
 VERDE = "1F7A4D"
 VERDE_SUAVE = "E3F1E9"
@@ -53,6 +53,7 @@ def exportar_excel(r: Resultados, ruta: str | Path) -> Path:
     est = est.rename(columns={"puesto": "Puesto", "forma": "Forma", "documento": "Documento", "nombre": "Nombre",
                               "curso": "Curso", "aciertos": "Aciertos",
                               "porcentaje": "% total", "nota": "Nota",
+                              "puntaje": "Puntaje tipo Saber (0–500)",
                               "aprobado": "Aprueba", "archivo": "Hoja"})
 
     materias = r.por_materia.rename(columns={
@@ -68,7 +69,9 @@ def exportar_excel(r: Resultados, ruta: str | Path) -> Path:
         "sospecha_clave": "¿Clave errada? (opción sugerida)",
         "pregunta": "Pregunta", "materia": "Materia", "clave": "Clave", "acierto": "% acierto",
         "dificultad": "Dificultad", "en_blanco": "En blanco", "doble_marca": "Doble marca",
-        "distractor": "Opción errada más elegida"})
+        "distractor": "Opción errada más elegida", "anulada": "Anulada"})
+    preguntas["Anulada"] = preguntas["Anulada"].map(
+        {"bien": "Sí: buena para todos", "excluir": "Sí: no cuenta"}).fillna("")
 
     respuestas = r.respuestas.copy()
     numeros = e.numeros_impresos()
@@ -90,6 +93,13 @@ def exportar_excel(r: Resultados, ruta: str | Path) -> Path:
             ("Promedio general (%)", round(r.por_estudiante["porcentaje"].mean(), 1)),
             ("Nota promedio", r.escala.nota(r.por_estudiante["porcentaje"].mean() / 100)),
             ("Aprueban", f"{int(r.por_estudiante['aprobado'].sum())} de {n}"),
+            *([("Puntaje tipo Saber promedio (0–500)",
+                round(r.por_estudiante["puntaje"].mean())),
+               ("Pesos del puntaje", ", ".join(
+                   f"{m.codigo} ×{pesos_saber(e, r.escala)[m.codigo]:g}" for m in e.materias)),
+               ("Nota sobre el puntaje", "Aproximación: cada materia = % de aciertos "
+                                         "(el ICFES usa el modelo Rasch).")]
+              if r.con_puntaje else []),
             ("Escala de notas", f"{r.escala.minima} a {r.escala.maxima} "
                                 f"(aprueba con {r.escala.aprobacion})"),
             ("Generado", datetime.now().strftime("%Y-%m-%d %H:%M")),
@@ -148,11 +158,15 @@ def exportar_excel(r: Resultados, ruta: str | Path) -> Path:
         col_dif = list(preguntas.columns).index("Dificultad") + 1
         colores = {"Fácil": VERDE_SUAVE, "Media": AMARILLO_SUAVE, "Difícil": ROJO_SUAVE}
         col_sosp = list(preguntas.columns).index("¿Clave errada? (opción sugerida)") + 1
+        col_anulada = list(preguntas.columns).index("Anulada") + 1
         for fila in hoja.iter_rows(min_row=2):
             fila[col_dif - 1].fill = PatternFill("solid", fgColor=colores[fila[col_dif - 1].value])
             if fila[col_sosp - 1].value:      # posible error en la clave: toda la fila resaltada
                 for celda in fila:
                     celda.fill = PatternFill("solid", fgColor="FFE08A")
+            if fila[col_anulada - 1].value:   # pregunta anulada: toda la fila en gris
+                for celda in fila:
+                    celda.fill = PatternFill("solid", fgColor=GRIS)
 
         # Formato: Respuestas (verde acierto, rojo error, gris en blanco)
         hoja = libro["Respuestas"]

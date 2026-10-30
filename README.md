@@ -49,7 +49,7 @@ colegio: calificar simulacros tipo Saber 11 sin pasar horas revisando hojas a ma
 |---|---|
 | **1 · Crear hoja** | Diseña la hoja: colegio, logo, materias, número de preguntas y opciones (A–D, A–E…). Vista previa en vivo. Genera el PDF para imprimir y la plantilla de lectura, **siempre sincronizados**. |
 | **2 · Leer hojas** | Lee los PDF del escáner (con [OMRChecker](https://github.com/Udayraj123/OMRChecker)). Muestra lo que detectó en cada hoja y permite corregir a mano. |
-| **3 · Resultados** | Clave de respuestas, notas en la escala que se elija (por defecto 1,0–5,0), tablero con gráficos, análisis por pregunta, alertas, Excel y boletines en PDF. |
+| **3 · Resultados** | Clave de respuestas, notas en la escala que se elija (por defecto 1,0–5,0), puntaje tipo Saber 11 (0–500), tablero con gráficos, análisis por pregunta, anulación de preguntas, alertas, Excel y boletines en PDF. |
 | **4 · Seguimiento** | Compara varios exámenes (por ejemplo, los simulacros del año) para ver si el curso y cada estudiante mejoran. |
 
 Además:
@@ -64,6 +64,14 @@ Además:
 - **Revisión de la clave:** avisa cuando una pregunta probablemente tiene la clave errada
   (casi nadie acierta y los mejores estudiantes marcan la misma otra opción).
 - **Calidad de las preguntas:** índice de discriminación (27 % superior e inferior, Kelley).
+- **Puntaje tipo Saber 11 (0–500):** promedio ponderado × 5 como el ICFES (Lectura, Matemáticas,
+  Sociales y Ciencias pesan 3; Inglés 1; pesos editables). Se activa solo en los simulacros.
+  Es una aproximación: cada materia vale su % de aciertos (el ICFES usa el modelo Rasch).
+- **Revisión rápida:** recorre una por una las preguntas con doble marca, las formas sin marcar y
+  los documentos incompletos o fuera de la lista, mostrando esa parte de la imagen ampliada.
+  Se responde con el teclado (A, B, C… o espacio = en blanco) y cada cambio se guarda enseguida.
+- **Anular preguntas:** una pregunta mal redactada o con dos respuestas válidas se puede dar por
+  buena a todos o sacar del cálculo; las notas se recalculan solas y se puede deshacer.
 - **Boletines individuales** en PDF, una página por estudiante.
 - **Compartir examen:** exporta o importa un examen completo en un `.zip` (otro docente, otra sede, copia de seguridad).
 - **Hojas de práctica:** genera un curso inventado ya diligenciado para aprender a usar el programa sin imprimir nada.
@@ -109,7 +117,8 @@ Se hace **una sola vez, con internet**. Después el programa funciona sin conexi
 3. **Leer hojas:** escanee todas las hojas en un solo PDF (blanco y negro o grises,
    200–300 ppp), agréguelo y pulse **Leer hojas**. Verde = bien, amarillo = revisar, rojo = no se leyó.
    Debajo de la lista, el recuadro de observaciones dice qué preguntas tienen doble marca o
-   quedaron en blanco. Doble clic sobre una hoja para corregirla.
+   quedaron en blanco. Con **⚡ Revisión rápida** se resuelven una por una, ampliadas.
+   Doble clic sobre una hoja para corregirla completa.
 4. **Resultados:** escriba la clave (una línea por materia) o tómela de una hoja leída, importe
    la lista del curso y revise notas, gráficos y alertas. Exporte a Excel o genere los boletines.
 
@@ -172,6 +181,11 @@ no coinciden al milímetro, las respuestas se leen mal. CalificaTAP lo resuelve 
   materia y pregunta, alertas (documento repetido, falta una hoja, no está en la lista, sin forma…).
 - **Posible error en la clave:** acierto < 35 %, y entre el tercio de mejores estudiantes
   (mínimo 5) al menos la mitad marcó la misma otra opción. Solo con 10 o más estudiantes por forma.
+- **Preguntas anuladas** (`clave.json` → `"anuladas": {"A": {"MAT_05": "bien" | "excluir"}}`):
+  «bien» cuenta como acierto para todos; «excluir» deja la pregunta fuera del cálculo. El análisis
+  de la pregunta (% de acierto, discriminación) se hace con lo que de verdad marcaron.
+- **Puntaje tipo Saber:** `round(5 × Σ peso·% materia / Σ pesos)`; con el puntaje activo, el puesto
+  lo da el puntaje.
 
 ## Estructura del proyecto
 
@@ -218,6 +232,7 @@ CalificaTAP/
 │       ├── vista_previa.py      ←   dibuja la hoja en pantalla
 │       ├── ventana_importar.py  ←   importar la lista de estudiantes
 │       ├── ventana_compartir.py ←   exportar / importar examen
+│       ├── ventana_revision.py  ←   revisión rápida de las hojas amarillas
 │       ├── estilos.py, utilidades.py
 ├── docs/
 │   ├── crear_manual.py          ← arma «Manual CalificaTAP.pdf»

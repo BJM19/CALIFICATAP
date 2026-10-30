@@ -12,6 +12,16 @@ Reglas de calificación:
     - En blanco o con doble marca vale 0.
     - Nota = mínima + (máxima − mínima) × porcentaje de aciertos
       (con la escala colombiana 1,0 a 5,0: el 60 % de aciertos da 3,4).
+    - Preguntas ANULADAS: "bien" = cuenta como acierto para todos;
+      "excluir" = no cuenta (se califica sobre las demás).
+
+Puntaje tipo Saber 11 (opcional, 0 a 500):
+    Como en el ICFES, cada materia da un puntaje de 0 a 100 y el global es un
+    promedio ponderado multiplicado por 5:
+        global = 5 × (3·LC + 3·MAT + 3·SOC + 3·CN + 1·ING) / 13
+    Aquí el puntaje de cada materia es su % de aciertos. El ICFES, en cambio,
+    usa un modelo estadístico (Rasch) que tiene en cuenta la dificultad de cada
+    pregunta, así que este puntaje es una APROXIMACIÓN para los simulacros.
 """
 
 from __future__ import annotations
@@ -23,6 +33,7 @@ import pandas as pd
 
 from ..examenes import Examen
 from ..lector.hojas import ERROR, HojaLeida, normalizar_documento
+from .clave import cargar_anuladas
 
 
 @dataclass
@@ -30,9 +41,58 @@ class Escala:
     minima: float = 1.0
     maxima: float = 5.0
     aprobacion: float = 3.0
+    # Puntaje tipo Saber 11: None = automático (sí, si las materias son las del ICFES)
+    puntaje_saber: bool | None = None
+    pesos: dict = field(default_factory=dict)      # {código_materia: peso}
 
     def nota(self, proporcion: float) -> float:
         return round(self.minima + (self.maxima - self.minima) * proporcion, 1)
+
+
+# Palabras que identifican las cinco pruebas del ICFES en el nombre de una materia
+AREAS_SABER = {
+    "lectura": ("lectura", "lenguaje", "español", "espanol", "castellano"),
+    "matematicas": ("matem",),
+    "sociales": ("social", "ciudadan"),
+    "naturales": ("natural", "ciencias nat", "biolog", "química", "quimica", "física", "fisica"),
+    "ingles": ("inglés", "ingles", "english"),
+}
+
+
+def area_saber(nombre_materia: str) -> str:
+    """'Ciencias Naturales' → 'naturales'; una materia que no es del ICFES → ''."""
+    nombre = nombre_materia.lower()
+    for area, palabras in AREAS_SABER.items():
+        if any(p in nombre for p in palabras):
+            return area
+    return ""
+
+
+def es_tipo_saber(examen: Examen) -> bool:
+    """¿El examen parece un simulacro Saber 11? (al menos 4 de las 5 pruebas)"""
+    return len({area_saber(m.nombre) for m in examen.materias} - {""}) >= 4
+
+
+def pesos_saber(examen: Examen, escala: Escala) -> dict[str, float]:
+    """Peso de cada materia: el que eligió el docente o, por defecto, 1 para inglés y 3 para las demás."""
+    return {m.codigo: float(escala.pesos.get(m.codigo, 1 if area_saber(m.nombre) == "ingles" else 3))
+            for m in examen.materias}
+
+
+def usa_puntaje_saber(examen: Examen, escala: Escala) -> bool:
+    return es_tipo_saber(examen) if escala.puntaje_saber is None else escala.puntaje_saber
+
+
+def puntaje_global(porcentajes: dict[str, float], pesos: dict[str, float]) -> float:
+    """
+    porcentajes = {código_materia: 0..100}. Devuelve el puntaje de 0 a 500.
+    Las materias sin dato (sin clave) no entran en el promedio.
+    """
+    validos = {c: p for c, p in porcentajes.items() if not pd.isna(p) and pesos.get(c, 0) > 0}
+    suma_pesos = sum(pesos[c] for c in validos)
+    if not suma_pesos:
+        return float("nan")
+    return round(5 * sum(pesos[c] * p for c, p in validos.items()) / suma_pesos)
 
 
 @dataclass
@@ -47,6 +107,12 @@ class Resultados:
     alertas: list[tuple[str, str]] = field(default_factory=list)   # (tipo, detalle)
     formas: pd.Series = field(default_factory=pd.Series)           # forma de cada estudiante
     claves: dict = field(default_factory=dict)                     # {forma: {etiqueta: letra}}
+    anuladas: dict = field(default_factory=dict)                   # {forma: {etiqueta: modo}}
+
+    @property
+    def con_puntaje(self) -> bool:
+        """¿Se calculó el puntaje tipo Saber 11 (0–500)?"""
+        return "puntaje" in self.por_estudiante
 
     @property
     def hay_datos(self) -> bool:
@@ -127,12 +193,16 @@ def dificultad(porcentaje: float) -> str:
 
 
 def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str, str]],
-              estudiantes: pd.DataFrame, escala: Escala) -> Resultados:
+              estudiantes: pd.DataFrame, escala: Escala,
+              anuladas: dict[str, dict[str, str]] | None = None) -> Resultados:
     """
     claves = {"A": {"MAT_01": "D", ...}, "B": {...}}
     Si el examen no tiene formas, solo existe la clave "A".
     Cada hoja se califica con la clave de SU forma.
+    anuladas = {"A": {"MAT_05": "bien"}, ...}; si no se pasa, se lee de clave.json.
     """
+    if anuladas is None:
+        anuladas = cargar_anuladas(examen)
     alertas: list[tuple[str, str]] = []
     materias = examen.materias
     todas = examen.todas_las_etiquetas()
@@ -223,6 +293,14 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
         if len(filas_forma) and cols:
             comparacion = respuestas.loc[filas_forma, cols].eq(pd.Series(clave)[cols])
             aciertos.loc[filas_forma, cols] = comparacion.astype(float)
+    # Lo que de verdad acertaron, ANTES de aplicar las anuladas (para analizar las preguntas)
+    reales = aciertos.copy()
+    # Preguntas anuladas: "bien" = acierto para todos; "excluir" = no cuenta
+    for forma, de_la_forma in anuladas.items():
+        filas_forma = formas[formas == forma].index
+        for e, modo in de_la_forma.items():
+            if e in aciertos and e in claves.get(forma, {}) and len(filas_forma):
+                aciertos.loc[filas_forma, e] = 1.0 if modo == "bien" else float("nan")
 
     # --- 2. Por estudiante ---
     por_est = pd.DataFrame(index=respuestas.index)
@@ -238,8 +316,17 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
     por_est["porcentaje"] = (aciertos.mean(axis=1) * 100).round(1)
     por_est["nota"] = [escala.nota(p / 100) for p in por_est["porcentaje"]]
     por_est["aprobado"] = por_est["nota"] >= escala.aprobacion
+    orden = "porcentaje"
+    if usa_puntaje_saber(examen, escala):
+        # Puntaje tipo Saber 11 (0–500): promedio ponderado de las materias × 5
+        pesos = pesos_saber(examen, escala)
+        con_dato = [m for m in materias if m.nombre in por_est]
+        por_est["puntaje"] = [
+            puntaje_global({m.codigo: fila[m.nombre] for m in con_dato}, pesos)
+            for _, fila in por_est.iterrows()]
+        orden = "puntaje"          # con pesos, el puesto lo da el puntaje
     por_est["archivo"] = archivos
-    por_est = por_est.sort_values(["porcentaje", "nombre"], ascending=[False, True])
+    por_est = por_est.sort_values([orden, "porcentaje", "nombre"], ascending=[False, False, True])
     por_est = por_est.reset_index()
     por_est.insert(0, "puesto", range(1, len(por_est) + 1))
 
@@ -268,22 +355,24 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
             continue
         # Grupos alto y bajo (solo si hay suficientes estudiantes en esta forma)
         hay_grupos = len(filas_forma) >= MIN_PARA_GRUPOS
-        puntajes = aciertos.loc[filas_forma].mean(axis=1)
+        puntajes = reales.loc[filas_forma].mean(axis=1)
         alto, bajo = grupos_alto_bajo(puntajes)
         # Para sospechar de la clave se mira el mejor tercio (mínimo 5 estudiantes)
         mejores = puntajes.sort_values(ascending=False).index[
             :max(5, round(len(puntajes) / 3))]
         for e in [x for x in todas if x in clave]:
             marcadas = respuestas.loc[filas_forma, e]
-            pct = round(aciertos.loc[filas_forma, e].mean() * 100, 1)
+            pct = round(reales.loc[filas_forma, e].mean() * 100, 1)
+            anulada = anuladas.get(forma, {}).get(e, "")
             # La opción incorrecta más elegida (el "distractor" más fuerte)
             erradas = marcadas[(marcadas != clave[e]) & (marcadas.str.len() == 1)]
             distractor = erradas.value_counts().idxmax() if not erradas.empty else ""
             # Discriminación: % de acierto del grupo alto − % del grupo bajo (de −1 a 1)
-            disc = (aciertos.loc[alto, e].mean() - aciertos.loc[bajo, e].mean()
+            disc = (reales.loc[alto, e].mean() - reales.loc[bajo, e].mean()
                     if hay_grupos else float("nan"))
             # Con pocos estudiantes (menos de 10 en esta forma) no se sospecha: sería azar
-            sospecha = sospecha_de_clave(marcadas, clave[e], mejores, pct) if hay_grupos else ""
+            sospecha = (sospecha_de_clave(marcadas, clave[e], mejores, pct)
+                        if hay_grupos and not anulada else "")   # si ya se anuló, no se avisa
             fila = {"forma": forma if hay_formas else "", "pregunta": numeros[e], "etiqueta": e,
                     "materia": nombre_materia[e], "clave": clave[e], "acierto": pct,
                     "dificultad": dificultad(pct),
@@ -292,7 +381,7 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
                     "respondieron": len(filas_forma),
                     "en_blanco": int((marcadas == "").sum()),
                     "doble_marca": int((marcadas.str.len() > 1).sum()),
-                    "distractor": distractor}
+                    "distractor": distractor, "anulada": anulada}
             if sospecha:
                 texto_forma = f" de la forma {forma}" if hay_formas else ""
                 alertas.insert(0, ("⚠ Revise la clave",
@@ -310,4 +399,4 @@ def calificar(examen: Examen, hojas: list[HojaLeida], claves: dict[str, dict[str
             por_pregunta[letra] = por_pregunta[letra].map(lambda v: "" if pd.isna(v) else int(v))
 
     return Resultados(examen, escala, por_est, por_materia, por_pregunta,
-                      respuestas, aciertos, alertas, formas, claves)
+                      respuestas, aciertos, alertas, formas, claves, anuladas)

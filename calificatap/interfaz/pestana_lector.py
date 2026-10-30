@@ -33,6 +33,7 @@ from ..reportes.estudiantes import cargar_estudiantes
 
 from . import estilos
 from .utilidades import MarcoDesplazable, SelectorExamen, VisorImagen
+from .ventana_revision import VentanaRevision, puntos_por_revisar
 
 ICONOS = {LISTA: "✔ Lista", REVISAR: "⚠ Revisar", ERROR: "✘ No se leyó"}
 AMARILLO_CLARO = "#FFF4D6"
@@ -107,11 +108,14 @@ class PestanaLector(ttk.Frame):
 
         botones = ttk.Frame(izquierda)
         botones.pack(side="bottom", fill="x", pady=(8, 0))   # abajo, siempre visible
+        self.btn_revision = ttk.Button(botones, text="⚡ Revisión rápida",
+                                       style="Primario.TButton", command=self.revision_rapida)
+        self.btn_revision.pack(side="left", padx=(0, 6))
         ttk.Button(botones, text="✏ Corregir…", command=self.corregir).pack(side="left")
         ttk.Button(botones, text="Eliminar", command=self.eliminar).pack(side="left", padx=6)
         ttk.Button(botones, text="Borrar todas", command=self.borrar_todas).pack(side="left")
         ttk.Label(botones, style="Subtitulo.TLabel",
-                  text="Doble clic en una hoja para corregirla").pack(side="right")
+                  text="Doble clic: corregir la hoja").pack(side="right")
 
         # --- 2. Hojas leídas ---
         marco = ttk.LabelFrame(izquierda, text="2. Hojas leídas", style="Seccion.TLabelframe")
@@ -398,6 +402,11 @@ class PestanaLector(ttk.Frame):
         listas = sum(h.estado == LISTA for h in self.hojas)
         revisar = sum(h.estado == REVISAR for h in self.hojas)
         errores = sum(h.estado == ERROR for h in self.hojas)
+        # El botón dice cuántas cosas hay por revisar
+        pendientes = len(puntos_por_revisar(self.hojas, self.nombres))
+        self.btn_revision.configure(text=f"⚡ Revisión rápida ({pendientes})" if pendientes
+                                    else "⚡ Revisión rápida")
+        self.btn_revision.state(["!disabled"] if pendientes else ["disabled"])
         self.lbl_resumen.configure(
             text=f"{n} hojas · ✔ {listas} listas · ⚠ {revisar} para revisar · ✘ {errores} sin leer"
             if n else "Todavía no hay hojas leídas para este examen.")
@@ -526,6 +535,13 @@ class PestanaLector(ttk.Frame):
         for h in hojas:
             if h.imagen and h.imagen not in en_uso:
                 (self.selector.examen.carpeta / h.imagen).unlink(missing_ok=True)
+
+    def revision_rapida(self) -> None:
+        """Recorre uno por uno los puntos dudosos (doble marca, documento, forma)."""
+        examen = self.selector.examen
+        if not examen or not self.hojas:
+            return
+        VentanaRevision(self, examen, self.hojas, self.nombres, al_cambiar=self._correccion_guardada)
 
     def corregir(self) -> None:
         h = self._hoja_seleccionada()

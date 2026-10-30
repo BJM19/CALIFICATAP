@@ -236,12 +236,25 @@ h += [p("3. El día del examen", H1),
                                    "esquina cortada), o es una hoja de OTRO examen. Escanéela de "
                                    "nuevo, léala en el examen correcto o corríjala a mano."]],
             [4, 12.5], {2: AMARILLO, 3: ROJO_CLARO}),
-      p("4.2 Corregir una hoja a mano", H2),
+      p("4.2 Revisión rápida (recomendado)", H2),
+      p("El botón verde <b>«Revisión rápida (N)»</b> muestra, uno por uno, los puntos dudosos de "
+        "todas las hojas: preguntas con doble marca, forma sin marcar y documentos incompletos o "
+        "que no están en la lista. Cada uno aparece <b>ampliado</b>, con un recuadro naranja; "
+        "usted mira y elige lo que marcó el estudiante, y pasa solo al siguiente."),
+      lista(["Con el teclado es más rápido: la letra (A, B, C…) elige la opción y la barra "
+             "espaciadora deja la pregunta <b>en blanco</b> (si de verdad marcó dos).",
+             "En el documento, escriba el número correcto: al lado aparece el nombre del "
+             "estudiante si está en la lista. Pulse Enter.",
+             "Cada cambio se guarda enseguida. Cuando se revisan todos los puntos de una hoja, "
+             "la hoja queda en verde.",
+             "«Abrir la hoja completa» lleva a la ventana de corrección de siempre."]),
+      captura("12_revision.png", 12, "Revisión rápida: la pregunta dudosa, ampliada."),
+      p("4.3 Corregir una hoja a mano", H2),
       p("Doble clic sobre la hoja: a la izquierda verá la imagen y a la derecha el documento, la "
         "forma y cada respuesta. Las preguntas con doble marca salen en amarillo y las que están en "
         "blanco, en gris. Corrija y pulse <b>«Guardar corrección»</b>."),
       captura("04_corregir.png", 15, "Ventana de corrección."),
-      p("4.3 Otros botones", H2),
+      p("4.4 Otros botones", H2),
       lista(["<b>Eliminar:</b> quita las hojas seleccionadas (con Ctrl o Shift se eligen varias).",
              "<b>Borrar todas:</b> empieza de cero en ese examen. Los PDF originales no se borran.",
              "Si vuelve a leer la hoja de un estudiante, la nueva <b>reemplaza</b> a la anterior: "
@@ -259,14 +272,15 @@ h += [p("5. Ver los resultados", H1),
              "«Tomar la clave de una hoja leída».",
              "<b>Lista de estudiantes</b> (opcional si ya la cargó al crear la hoja): para ver los "
              "nombres y saber quién no entregó.",
-             "<b>Escala de notas:</b> por defecto de 1,0 a 5,0 y aprueba con 3,0."], numerada=True),
+             "<b>Escala de notas:</b> por defecto de 1,0 a 5,0 y aprueba con 3,0. Ahí mismo está "
+             "la casilla del <b>puntaje tipo Saber 11</b> (ver 5.1)."], numerada=True),
       captura("05_resultados.png", pie="Pestaña «Resultados»: clave a la izquierda; tablero a la "
                                        "derecha. Todo se recalcula solo."),
-      p("En el tablero verá cuatro cuadros (estudiantes, nota promedio, cuántos aprueban y la "
-        "pregunta más difícil) y cuatro pestañas:"),
+      p("En el tablero verá los cuadros de estudiantes, nota promedio, cuántos aprueban, "
+        "puntaje tipo Saber (si está activo) y la pregunta más difícil, y cuatro pestañas:"),
       tabla([["Pestaña", "Qué muestra"],
-             ["Estudiantes", "Puesto, porcentaje por materia, nota y si aprueba. Clic en un "
-                             "título para ordenar."],
+             ["Estudiantes", "Puesto, porcentaje por materia, puntaje (0–500), nota y si "
+                             "aprueba. Clic en un título para ordenar."],
              ["Materias", "Promedio de cada materia en un gráfico y en una tabla."],
              ["Preguntas", "Qué tanto acertó el curso en cada pregunta (verde fácil, amarillo "
                            "media, rojo difícil), la opción errada más elegida y si la pregunta "
@@ -280,15 +294,44 @@ h += [p("5. Ver los resultados", H1),
       recuadro("<b>Posible error en la clave.</b> Si casi nadie acertó una pregunta y la mayoría de "
                "los MEJORES estudiantes marcó la misma otra opción, lo más probable es que la clave "
                "esté mal. El programa lo avisa en rojo arriba y en «Alertas». Revise esa pregunta "
-               "en su cuadernillo: si la clave estaba mal, corríjala y las notas se recalculan solas.",
+               "en su cuadernillo: si la clave estaba mal, corríjala y las notas se recalculan solas. "
+               "Si la clave estaba bien pero la pregunta tenía un problema, anúlela (ver 5.2).",
                AMARILLO),
       Spacer(1, 0.3 * cm),
-      p("5.1 Exportar a Excel", H2),
+      p("5.1 Puntaje tipo Saber 11 (0 a 500)", H2),
+      p("En los simulacros, además de la nota, el programa calcula un puntaje global de 0 a 500 "
+        "como el del ICFES: cada materia da un puntaje de 0 a 100 y el global es el promedio "
+        "ponderado multiplicado por 5. Lectura crítica, Matemáticas, Sociales y Ciencias pesan 3 "
+        "e Inglés pesa 1."),
+      lista(["Se activa solo cuando las materias del examen son las del ICFES. Para cualquier "
+             "otro examen, marque o desmarque la casilla <b>«Puntaje tipo Saber 11»</b> en "
+             "«3. Escala de notas».",
+             "Con <b>«Pesos…»</b> se cambia el peso de cada materia (0 = no cuenta).",
+             "Cuando el puntaje está activo, el <b>puesto</b> de cada estudiante lo da el puntaje. "
+             "El puntaje sale también en el Excel y en los boletines."]),
+      recuadro("Es una <b>aproximación</b>: aquí cada materia vale su porcentaje de aciertos. El "
+               "ICFES usa un modelo estadístico que tiene en cuenta la dificultad de cada pregunta, "
+               "así que el puntaje real puede ser distinto. Sirve para ver el avance entre "
+               "simulacros, no para predecir el resultado exacto."),
+      Spacer(1, 0.3 * cm),
+      p("5.2 Anular una pregunta", H2),
+      p("Si una pregunta estaba mal redactada, tenía dos respuestas válidas o era de un tema que "
+        "no se alcanzó a ver, se puede anular. En la pestaña <b>«Preguntas»</b> elíjala en la "
+        "tabla y pulse <b>«Anular pregunta…»</b>. Hay dos opciones:"),
+      lista(["<b>Se le da por buena a todos:</b> cuenta como acierto para todos los estudiantes "
+             "(sube la nota de quienes la fallaron).",
+             "<b>No cuenta:</b> se quita del cálculo y cada estudiante se califica sobre las demás "
+             "preguntas."]),
+      captura("11_anular.png", 9, "Ventana para anular una pregunta."),
+      p("La pregunta anulada se ve en gris en la tabla y en el gráfico. Para deshacerlo, elíjala "
+        "y pulse <b>«Quitar anulación»</b>. Con formas, se anula la pregunta de la forma que se "
+        "está viendo."),
+      p("5.3 Exportar a Excel", H2),
       p("El botón <b>«Exportar a Excel»</b> crea <b>resultados.xlsx</b> en la carpeta del examen, con "
         "las hojas Resumen (con gráfico), Estudiantes, Materias, Preguntas, Respuestas (verde bien, "
         "rojo mal) y Alertas. Si Excel muestra un error al exportar, cierre el archivo y vuelva a "
         "intentar."),
-      p("5.2 Boletines para los estudiantes", H2),
+      p("5.4 Boletines para los estudiantes", H2),
       p("El botón <b>«Boletines (PDF)»</b> crea <b>boletines.pdf</b>: una página por estudiante "
         "con su nota, su porcentaje, su puesto, el resultado de cada materia comparado con el "
         "promedio del curso y las <b>preguntas para repasar</b> (lo que marcó y la respuesta "

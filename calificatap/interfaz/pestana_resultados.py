@@ -26,9 +26,10 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from ..lector.hojas import ERROR, cargar_hojas, guardar_hojas
-from ..reportes.calificar import Escala, calificar, cargar_escala, guardar_escala
-from ..reportes.clave import (cargar_clave, clave_a_textos, guardar_clave, revisar_texto,
-                              textos_a_clave)
+from ..reportes.calificar import (Escala, calificar, cargar_escala, guardar_escala,
+                                  pesos_saber, usa_puntaje_saber)
+from ..reportes.clave import (MODOS_ANULACION, anular_pregunta, cargar_clave, clave_a_textos,
+                              guardar_clave, revisar_texto, textos_a_clave)
 from ..reportes.estudiantes import cargar_estudiantes, guardar_estudiantes
 from ..reportes.excel import exportar_excel
 from . import estilos
@@ -48,6 +49,9 @@ class PestanaResultados(ttk.Frame):
         self._id_recalculo = None
         self._cargando = False
         self._orden = ("puesto", False)
+        # Puntaje tipo Saber 11: None = automático; pesos = {código_materia: peso}
+        self._puntaje_saber: bool | None = None
+        self._pesos: dict[str, float] = {}
         self._construir(var_examen)
 
     # ======================================================================
@@ -116,15 +120,27 @@ class PestanaResultados(ttk.Frame):
                 row=1, column=i, sticky="w", padx=4)
             var.trace_add("write", lambda *_: self._programar_recalculo())
 
+        # Puntaje tipo Saber 11 (0–500)
+        self.var_puntaje = tk.BooleanVar(value=False)
+        fila_p = ttk.Frame(marco, style="Panel.TFrame")
+        fila_p.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        ttk.Checkbutton(fila_p, text="Puntaje tipo Saber 11 (0 a 500)", variable=self.var_puntaje,
+                        command=self._cambio_puntaje).pack(side="left")
+        ttk.Button(fila_p, text="Pesos…", style="Pequeno.TButton",
+                   command=self.editar_pesos).pack(side="left", padx=6)
+        self.lbl_pesos = ttk.Label(marco, style="Ayuda.TLabel", wraplength=380, justify="left")
+        self.lbl_pesos.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
         # --- Tablero (derecha) ---
         tarjetas = ttk.Frame(derecha)
         tarjetas.pack(fill="x")
-        self.t_estudiantes = Tarjeta(tarjetas, "Estudiantes calificados")
+        self.t_estudiantes = Tarjeta(tarjetas, "Estudiantes")
         self.t_promedio = Tarjeta(tarjetas, "Nota promedio")
         self.t_aprueban = Tarjeta(tarjetas, "Aprueban")
-        self.t_dificil = Tarjeta(tarjetas, "Pregunta más difícil")
-        for t in (self.t_estudiantes, self.t_promedio, self.t_aprueban, self.t_dificil):
-            t.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.t_puntaje = Tarjeta(tarjetas, "Puntaje (0–500)")
+        self.t_dificil = Tarjeta(tarjetas, "Más difícil")
+        self.marco_tarjetas = tarjetas
+        self._ubicar_tarjetas(con_puntaje=False)
 
         self.lbl_aviso = tk.Label(derecha, anchor="w", justify="left", padx=10, pady=6,
                                   wraplength=780,
@@ -184,20 +200,31 @@ class PestanaResultados(ttk.Frame):
         combo.bind("<<ComboboxSelected>>", lambda e: self.resultados and self._mostrar_preguntas(self.resultados))
         self.combo_forma_preg = combo
         self.pagina_preguntas = pagina
-        self.fig_preguntas = Figure(figsize=(6, 2.6), dpi=96)
+        self.fig_preguntas = Figure(figsize=(6, 2.3), dpi=96)
         self.lienzo_preguntas = FigureCanvasTkAgg(self.fig_preguntas, master=pagina)
         self.lienzo_preguntas.get_tk_widget().pack(fill="x")
         self.tabla_preg = self._tabla(pagina, [
-            ("pregunta", "N.º", 45), ("materia", "Materia", 135), ("clave", "Clave", 50),
+            ("pregunta", "N.º", 45), ("materia", "Materia", 135), ("clave", "Clave", 95),
             ("acierto", "% acierto", 70), ("dificultad", "Dificultad", 75),
             ("calidad", "¿Discrimina?", 90), ("distractor", "Errada + elegida", 110),
             ("en_blanco", "Blanco", 55), ("doble_marca", "Doble", 50)])
-        # Preguntas con posible error en la clave: en amarillo
+        # Preguntas con posible error en la clave: en amarillo; anuladas: en gris
         self.tabla_preg.tag_configure("sospecha", background="#FFE08A")
+        self.tabla_preg.tag_configure("anulada", foreground=estilos.TEXTO_SUAVE,
+                                      background="#ECEFED")
+        self.tabla_preg.configure(selectmode="browse")
+        botones = ttk.Frame(pagina)
+        # Abajo y empacado ANTES que la tabla, para que la tabla no lo tape
+        botones.pack(side="bottom", fill="x", pady=(6, 0), before=self.tabla_preg.master)
+        ttk.Button(botones, text="⊘ Anular pregunta…", command=self.anular).pack(side="left")
+        ttk.Button(botones, text="Quitar anulación", command=self.quitar_anulacion).pack(
+            side="left", padx=6)
+        self.lbl_anuladas = ttk.Label(botones, style="Subtitulo.TLabel")
+        self.lbl_anuladas.pack(side="left", padx=8)
         ttk.Label(pagina, style="Subtitulo.TLabel", wraplength=700, justify="left",
                   text="¿Discrimina?: Buena = la aciertan más los mejores que los más flojos. "
                        "Revisar = puede estar mal redactada o ser ambigua. "
-                       "En amarillo: posible error en la clave.").pack(
+                       "En amarillo: posible error en la clave. En gris: pregunta anulada.").pack(
             anchor="w", pady=(0, 4), before=self.tabla_preg.master)
 
     def _pestana_alertas(self) -> None:
@@ -235,6 +262,9 @@ class PestanaResultados(ttk.Frame):
         self.var_min.set(f"{escala.minima:.1f}")
         self.var_max.set(f"{escala.maxima:.1f}")
         self.var_aprueba.set(f"{escala.aprobacion:.1f}")
+        self._puntaje_saber, self._pesos = escala.puntaje_saber, dict(escala.pesos)
+        self.var_puntaje.set(usa_puntaje_saber(examen, escala))
+        self._actualizar_lbl_pesos()
 
         # Una fila por materia (nombre, caja de texto y estado "25/25 ✔").
         # Si el examen tiene formas, se repite el bloque para cada forma.
@@ -373,7 +403,8 @@ class PestanaResultados(ttk.Frame):
         try:
             e = Escala(float(self.var_min.get().replace(",", ".")),
                        float(self.var_max.get().replace(",", ".")),
-                       float(self.var_aprueba.get().replace(",", ".")))
+                       float(self.var_aprueba.get().replace(",", ".")),
+                       self._puntaje_saber, dict(self._pesos))
         except ValueError:
             return None
         return e if e.minima < e.maxima and e.minima <= e.aprobacion <= e.maxima else None
@@ -436,12 +467,14 @@ class PestanaResultados(ttk.Frame):
                 f"{p['pregunta']}{' (' + p['forma'] + ')' if p['forma'] else ''}"
                 for _, p in sospechas.head(5).iterrows())
             self._aviso(f"⚠ Posible error en la clave de la(s) pregunta(s) {lista}: la mayoría "
-                        "de los mejores estudiantes marcó otra opción. Revísela(s) en la "
-                        "pestaña «Alertas».", "error")
+                        "de los mejores estudiantes marcó otra opción. Revísela(s): si la "
+                        "clave estaba mal, corríjala; si la pregunta tenía un problema, "
+                        "anúlela en la pestaña «Preguntas».", "error")
         self._mostrar(r)
 
     def _limpiar(self) -> None:
-        for t in (self.t_estudiantes, self.t_promedio, self.t_aprueban, self.t_dificil):
+        for t in (self.t_estudiantes, self.t_promedio, self.t_aprueban, self.t_puntaje,
+                  self.t_dificil):
             t.poner("—")
         for tabla in (self.tabla_preg, self.tabla_alertas, self.tabla_est, self.tabla_mat):
             if tabla is not None:
@@ -461,10 +494,18 @@ class PestanaResultados(ttk.Frame):
         self.t_promedio.poner(f"{nota_prom:.1f}", f"{promedio:.0f} % de aciertos",
                               estilos.VERDE_OSCURO if nota_prom >= esc.aprobacion else estilos.ROJO)
         self.t_aprueban.poner(f"{aprueban} de {n}", f"{aprueban / n * 100:.0f} % del grupo")
-        peor = r.por_pregunta.sort_values("acierto").iloc[0]
+        self._ubicar_tarjetas(r.con_puntaje)
+        if r.con_puntaje:
+            puntajes = est["puntaje"].dropna()
+            self.t_puntaje.poner(f"{puntajes.mean():.0f}",
+                                 f"de {puntajes.min():.0f} a {puntajes.max():.0f}")
+        # La más difícil, sin contar las anuladas
+        vigentes = r.por_pregunta[r.por_pregunta["anulada"] == ""]
+        peor = (vigentes if not vigentes.empty else r.por_pregunta).sort_values("acierto").iloc[0]
         forma = f" ({peor['forma']})" if peor["forma"] else ""
+        codigo = {m.nombre: m.codigo for m in r.examen.materias}.get(peor["materia"], "")
         self.t_dificil.poner(f"N.º {peor['pregunta']}{forma}",
-                             f"{peor['materia']} · {peor['acierto']:.0f} % acertó")
+                             f"{codigo} · {peor['acierto']:.0f} % acertó")
 
         self._llenar_estudiantes(r)
         self._dibujar_materias(r)
@@ -481,6 +522,21 @@ class PestanaResultados(ttk.Frame):
             self.tabla_alertas.insert("", "end", values=(tipo, detalle))
         self.pestanas.tab(self.pag_alertas,
                           text=f"  Alertas ({len(r.alertas)})  " if r.alertas else "  Alertas  ")
+
+    def _ubicar_tarjetas(self, con_puntaje: bool) -> None:
+        """Pone las tarjetas del tablero en columnas del mismo ancho
+        (la del puntaje solo si se está calculando el puntaje tipo Saber)."""
+        visibles = [self.t_estudiantes, self.t_promedio, self.t_aprueban]
+        visibles += [self.t_puntaje] if con_puntaje else []
+        visibles.append(self.t_dificil)
+        for t in (self.t_estudiantes, self.t_promedio, self.t_aprueban, self.t_puntaje,
+                  self.t_dificil):
+            t.grid_forget()
+        for i in range(5):
+            self.marco_tarjetas.columnconfigure(i, weight=1 if i < len(visibles) else 0,
+                                                uniform="tarjeta" if i < len(visibles) else "")
+        for i, t in enumerate(visibles):
+            t.grid(row=0, column=i, sticky="nsew", padx=(0, 8))
 
     def _preparar_filtro_formas(self, examen) -> None:
         """Muestra "Ver la forma: [A]" solo si el examen tiene formas."""
@@ -505,11 +561,21 @@ class PestanaResultados(ttk.Frame):
         self.tabla_preg.delete(*self.tabla_preg.get_children())
         for _, fila in p.iterrows():
             clave = fila["clave"] + (f" → ¿{fila['sospecha_clave']}?" if fila["sospecha_clave"] else "")
-            self.tabla_preg.insert("", "end", values=(
-                fila["pregunta"], fila["materia"], clave, f"{fila['acierto']:.0f} %",
-                fila["dificultad"], fila["calidad"] or "—", fila["distractor"] or "—",
-                fila["en_blanco"], fila["doble_marca"]),
-                tags=("sospecha",) if fila["sospecha_clave"] else ())
+            if fila["anulada"]:
+                clave = f"{fila['clave']} ⊘ " + ("todos" if fila["anulada"] == "bien"
+                                                 else "excluida")
+            etiqueta_fila = "anulada" if fila["anulada"] else (
+                "sospecha" if fila["sospecha_clave"] else "")
+            # iid = "forma|etiqueta": así se sabe qué pregunta anular
+            self.tabla_preg.insert("", "end", iid=f"{fila['forma'] or 'A'}|{fila['etiqueta']}",
+                values=(fila["pregunta"], fila["materia"], clave, f"{fila['acierto']:.0f} %",
+                        fila["dificultad"], fila["calidad"] or "—", fila["distractor"] or "—",
+                        fila["en_blanco"], fila["doble_marca"]),
+                tags=(etiqueta_fila,) if etiqueta_fila else ())
+        n_anuladas = sum(len(a) for a in r.anuladas.values())
+        self.lbl_anuladas.configure(
+            text=f"{n_anuladas} pregunta(s) anulada(s)" if n_anuladas
+            else "Elija una pregunta de la tabla para anularla.")
 
     def _llenar_estudiantes(self, r) -> None:
         # Las columnas dependen de las materias: se vuelve a crear la tabla
@@ -523,14 +589,19 @@ class PestanaResultados(ttk.Frame):
                      ("nombre", "Nombre", 160 if con_forma else 180)]
                     + ([("forma", "Forma", 46)] if con_forma else [])
                     + [(m, f"{codigos[m]} %", 54) for m in materias]
-                    + [("porcentaje", "Total %", 62), ("nota", "Nota", 50), ("aprobado", "Aprueba", 66)])
+                    + [("porcentaje", "Total %", 62)]
+                    + ([("puntaje", "Puntaje", 62)] if r.con_puntaje else [])
+                    + [("nota", "Nota", 50), ("aprobado", "Aprueba", 66)])
         self.tabla_est = self._tabla(self.pag_estudiantes, columnas)
         self.tabla_est.tag_configure("pierde", background=estilos.ROJO_CLARO)
         for _, f in r.por_estudiante.iterrows():
             valores = ([f["puesto"], f["documento"], f["nombre"] or "—"]
                        + ([f["forma"]] if con_forma else [])
                        + ["—" if pd.isna(f[m]) else f"{f[m]:.0f}" for m in materias]
-                       + [f"{f['porcentaje']:.0f}", f"{f['nota']:.1f}",
+                       + [f"{f['porcentaje']:.0f}"]
+                       + (["—" if pd.isna(f["puntaje"]) else f"{f['puntaje']:.0f}"]
+                          if r.con_puntaje else [])
+                       + [f"{f['nota']:.1f}",
                           "✔ Sí" if f["aprobado"] else "✘ No"])
             self.tabla_est.insert("", "end", values=valores,
                                   tags=() if f["aprobado"] else ("pierde",))
@@ -585,7 +656,9 @@ class PestanaResultados(ttk.Frame):
             self.lienzo_preguntas.draw()
             return
         ax = fig.add_subplot(111)
-        colores = [COLOR_DIFICULTAD[d] for d in p["dificultad"]]
+        # Las anuladas en gris (ya no cuentan como difíciles)
+        colores = ["#B9C2BE" if a else COLOR_DIFICULTAD[d]
+                   for d, a in zip(p["dificultad"], p["anulada"])]
         ax.bar(range(len(p)), p["acierto"], color=colores, width=0.8)
         paso = max(1, len(p) // 20)
         ax.set_xticks(range(0, len(p), paso))
@@ -594,8 +667,10 @@ class PestanaResultados(ttk.Frame):
         ax.set_ylabel("% que acertó", fontsize=9, color="#5C6B64")
         ax.set_title("Acierto por pregunta", loc="left", fontsize=11,
                      color=estilos.TEXTO, fontweight="bold")
-        ax.legend(handles=[Patch(color=c, label=f"{d}") for d, c in COLOR_DIFICULTAD.items()],
-                  loc="upper right", ncol=3, fontsize=8, frameon=False, bbox_to_anchor=(1, 1.18))
+        leyenda = [Patch(color=c, label=f"{d}") for d, c in COLOR_DIFICULTAD.items()]
+        if (p["anulada"] != "").any():
+            leyenda.append(Patch(color="#B9C2BE", label="Anulada"))
+        ax.legend(handles=leyenda, loc="upper right", ncol=len(leyenda), fontsize=8, frameon=False, bbox_to_anchor=(1, 1.18))
         self._estilo_ejes(ax)
         fig.tight_layout()
         self.lienzo_preguntas.draw()
@@ -603,6 +678,145 @@ class PestanaResultados(ttk.Frame):
     # ======================================================================
     # Exportar
     # ======================================================================
+    # ======================================================================
+    # Puntaje tipo Saber 11
+    # ======================================================================
+    def _actualizar_lbl_pesos(self) -> None:
+        examen = self.selector.examen
+        if not examen or not self.var_puntaje.get():
+            self.lbl_pesos.configure(text="Promedio ponderado de las materias × 5, como el ICFES.")
+            return
+        pesos = pesos_saber(examen, Escala(pesos=self._pesos))
+        self.lbl_pesos.configure(text="Pesos: " + " · ".join(
+            f"{m.codigo} ×{pesos[m.codigo]:g}" for m in examen.materias)
+            + ". Es una aproximación: cada materia vale su % de aciertos.")
+
+    def _cambio_puntaje(self) -> None:
+        self._puntaje_saber = self.var_puntaje.get()
+        self._actualizar_lbl_pesos()
+        self._programar_recalculo()
+
+    def editar_pesos(self) -> None:
+        """Ventana para cambiar el peso de cada materia en el puntaje (0 = no cuenta)."""
+        examen = self.selector.examen
+        if not examen:
+            return
+        ventana = tk.Toplevel(self)
+        ventana.title("Pesos del puntaje tipo Saber 11")
+        ventana.transient(self.winfo_toplevel())
+        ventana.configure(bg=estilos.FONDO, padx=16, pady=14)
+        ttk.Label(ventana, wraplength=360, justify="left",
+                  text="En el ICFES, Lectura crítica, Matemáticas, Sociales y Ciencias pesan 3 "
+                       "e Inglés pesa 1. Con 0, la materia no entra en el puntaje.").pack(
+            anchor="w", pady=(0, 10))
+        cuadro = ttk.Frame(ventana)
+        cuadro.pack(fill="x")
+        actuales = pesos_saber(examen, Escala(pesos=self._pesos))
+        variables = {}
+        for i, m in enumerate(examen.materias):
+            ttk.Label(cuadro, text=m.nombre).grid(row=i, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=f"{actuales[m.codigo]:g}")
+            ttk.Spinbox(cuadro, from_=0, to=10, increment=1, width=5,
+                        textvariable=var).grid(row=i, column=1, padx=8, pady=2)
+            variables[m.codigo] = var
+
+        def por_defecto():
+            for m in examen.materias:
+                variables[m.codigo].set(f"{pesos_saber(examen, Escala())[m.codigo]:g}")
+
+        def aceptar():
+            try:
+                nuevos = {c: float(v.get().replace(",", ".")) for c, v in variables.items()}
+            except ValueError:
+                messagebox.showerror("Pesos", "Escriba solo números.", parent=ventana)
+                return
+            if any(p < 0 for p in nuevos.values()) or not any(nuevos.values()):
+                messagebox.showerror("Pesos", "Los pesos deben ser 0 o más, y al menos uno "
+                                     "mayor que 0.", parent=ventana)
+                return
+            self._pesos = nuevos
+            ventana.destroy()
+            self._actualizar_lbl_pesos()
+            self._programar_recalculo()
+
+        botones = ttk.Frame(ventana)
+        botones.pack(fill="x", pady=(12, 0))
+        ttk.Button(botones, text="Como el ICFES", command=por_defecto).pack(side="left")
+        ttk.Button(botones, text="Aceptar", style="Primario.TButton",
+                   command=aceptar).pack(side="right")
+        ttk.Button(botones, text="Cancelar", command=ventana.destroy).pack(side="right", padx=6)
+        ventana.grab_set()
+
+    # ======================================================================
+    # Anular preguntas
+    # ======================================================================
+    def _pregunta_elegida(self):
+        """Devuelve (forma, etiqueta, fila de por_pregunta) de la pregunta seleccionada."""
+        seleccion = self.tabla_preg.selection()
+        if not seleccion or self.resultados is None:
+            messagebox.showinfo("Anular pregunta", "Primero elija una pregunta en la tabla.",
+                                parent=self)
+            return None
+        forma, etiqueta = seleccion[0].split("|")
+        p = self.resultados.por_pregunta
+        fila = p[(p["etiqueta"] == etiqueta) & ((p["forma"] == forma) | (p["forma"] == ""))]
+        return forma, etiqueta, fila.iloc[0]
+
+    def anular(self) -> None:
+        elegida = self._pregunta_elegida()
+        if not elegida:
+            return
+        forma, etiqueta, fila = elegida
+        examen = self.selector.examen
+        texto_forma = f" de la forma {forma}" if examen.letras_formas else ""
+
+        ventana = tk.Toplevel(self)
+        ventana.title("Anular pregunta")
+        ventana.transient(self.winfo_toplevel())
+        ventana.configure(bg=estilos.FONDO, padx=16, pady=14)
+        ttk.Label(ventana, style="Subtitulo.TLabel", wraplength=400, justify="left",
+                  text=f"Pregunta {fila['pregunta']}{texto_forma} · {fila['materia']} · "
+                       f"clave {fila['clave']} · la acertó el {fila['acierto']:.0f} %").pack(
+            anchor="w")
+        ttk.Label(ventana, wraplength=400, justify="left",
+                  text="Anule una pregunta cuando estaba mal redactada, tenía dos respuestas "
+                       "válidas o no se alcanzó a ver el tema. ¿Qué hacer con ella?").pack(
+            anchor="w", pady=(8, 6))
+        var_modo = tk.StringVar(value=fila["anulada"] or "bien")
+        for modo, texto in MODOS_ANULACION.items():
+            ttk.Radiobutton(ventana, text=texto, value=modo, variable=var_modo).pack(
+                anchor="w", pady=2)
+        ttk.Label(ventana, style="Ayuda.TLabel", wraplength=400, justify="left",
+                  text="«Buena a todos» sube la nota de quienes la fallaron. «No cuenta» "
+                       "califica sobre las demás preguntas. Se puede deshacer con «Quitar "
+                       "anulación».").pack(anchor="w", pady=(6, 0))
+
+        def aceptar():
+            anular_pregunta(examen, forma, etiqueta, var_modo.get())
+            ventana.destroy()
+            self.recalcular()
+            if self.tabla_preg.exists(f"{forma}|{etiqueta}"):
+                self.tabla_preg.selection_set(f"{forma}|{etiqueta}")
+                self.tabla_preg.see(f"{forma}|{etiqueta}")
+
+        botones = ttk.Frame(ventana)
+        botones.pack(fill="x", pady=(12, 0))
+        ttk.Button(botones, text="Anular", style="Primario.TButton",
+                   command=aceptar).pack(side="right")
+        ttk.Button(botones, text="Cancelar", command=ventana.destroy).pack(side="right", padx=6)
+        ventana.grab_set()
+
+    def quitar_anulacion(self) -> None:
+        elegida = self._pregunta_elegida()
+        if not elegida:
+            return
+        forma, etiqueta, fila = elegida
+        if not fila["anulada"]:
+            messagebox.showinfo("Quitar anulación", "Esa pregunta no está anulada.", parent=self)
+            return
+        anular_pregunta(self.selector.examen, forma, etiqueta, None)
+        self.recalcular()
+
     def boletines(self) -> None:
         """Un boletín de una página por estudiante, todos en un PDF."""
         if not self.resultados or not self.resultados.hay_datos:
